@@ -480,7 +480,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         if self.ranOnce:
             time.sleep(60 * 60)
         self.ranOnce = True
-        if self.serverConnectedRecently():
+        if self.env == 'prod' and self.serverConnectedRecently():
             last_checkin = config.get().get('server checkin')
             elapsed_minutes = (time.time() - last_checkin) / 60
             wait_minutes = max(0, 10 - elapsed_minutes)

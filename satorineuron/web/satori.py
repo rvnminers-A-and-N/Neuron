@@ -2247,7 +2247,7 @@ def streams_api():
             order=order,
             force_refresh=True      
         )
-
+        
         if isinstance(pagination_info, dict):
             response_data = {
                 'streams': oracleStreams,

@@ -1164,8 +1164,6 @@
     }
   }
 
-  fetchStreams();
-
   function closeModal() {
     document.getElementById('observationsModal').style.display = 'none';
     document.body.classList.remove('modal-open');
@@ -1208,31 +1206,31 @@
   }
 
   function debounceSearch() {
-  if (timeout) {
-    clearTimeout(timeout);
-  }
-  
-  // Capture the current search value immediately
-  const currentSearchText = document.getElementById('searchInput').value.trim();
-  
-  // Show loading state only if search text has actually changed
-  if (currentSearchText !== currentSearch) {
-    showLoadingState();
-  }
-  
-  timeout = setTimeout(() => {
-    // Re-check the search input value at execution time
-    const searchText = document.getElementById('searchInput').value.trim();
-    
-    // Only proceed if the search text is still the same as when timeout was set
-    // This prevents race conditions where user continues typing after request is sent
-    if (searchText === currentSearchText) {
-      currentSearch = searchText;
-      currentPage = 1;
-      fetchStreams(searchText, 1, currentSort, currentOrder);
+    if (timeout) {
+      clearTimeout(timeout);
     }
-  }, 300);
-}
+    
+    // Capture the current search value immediately
+    const currentSearchText = document.getElementById('searchInput').value.trim();
+    
+    // Show loading state only if search text has actually changed
+    if (currentSearchText !== currentSearch) {
+      showLoadingState();
+    }
+    
+    timeout = setTimeout(() => {
+      // Re-check the search input value at execution time
+      const searchText = document.getElementById('searchInput').value.trim();
+      
+      // Only proceed if the search text is still the same as when timeout was set
+      // This prevents race conditions where user continues typing after request is sent
+      if (searchText === currentSearchText) {
+        currentSearch = searchText;
+        currentPage = 1;
+        fetchStreams(searchText, 1, currentSort, currentOrder);
+      }
+    }, 300);
+  }
 
   function showLoadingState() {
     const tableBody = document.getElementById('updating_table');
@@ -1494,6 +1492,10 @@
             <div class="detail-item" style="margin-top: 16px;">
               <div class="detail-label">Description</div>
               <div class="detail-value">${stream.description || 'N/A'}</div>
+            </div>
+            <div class="detail-item" style="margin-top: 16px;">
+              <div class="detail-label">price</div>
+              <div class="detail-value">${stream.price_per_obs}</div>
             </div>
           </div>
         </td>
