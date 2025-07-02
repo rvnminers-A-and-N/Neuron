@@ -2210,6 +2210,8 @@ def streams():
             'hasRoom': len(start.subscriptions) < 10,
             'darkmode': darkmode,
             'streams': [], 
+            'subscribed_uuids': [s.streamId.uuid for s in start.subscriptions],
+            'published_uuids': [s.streamId.uuid for s in start.publications],
             'totalStreams': 0, 
         }))
     else:

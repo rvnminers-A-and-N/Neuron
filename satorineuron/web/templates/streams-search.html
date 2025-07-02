@@ -1480,6 +1480,19 @@
                 <div class="detail-label">Predictions Count</div>
                 <div class="detail-value">${stream.predictors_count || 0}</div>
               </div>
+              <div class="detail-item">
+                <div class="detail-label">price</div>
+                <div class="detail-value">${stream.price_per_obs}</div> 
+              </div>
+              ${!{{ subscribed_uuids }}.includes(stream.uuid) && !{{ published_uuids }}.includes(stream.uuid) ? 
+              `<div class="detail-item">
+                <button 
+                  class="action-button chart-button" 
+                  id="stream_buy_${stream.stream_id}"
+                  onclick="buyStream(${stream.stream_id}, event);"
+                  title="${stream.price_per_obs > 0 ? 'Buy' : 'Subscribe'}"
+                >${stream.price_per_obs > 0 ? 'Buy' : 'Subscribe'}</button>
+              </div>` : ''}
             </div>
             <div class="detail-item" style="margin-top: 16px;">
               <div class="detail-label">URL</div>
@@ -1492,10 +1505,6 @@
             <div class="detail-item" style="margin-top: 16px;">
               <div class="detail-label">Description</div>
               <div class="detail-value">${stream.description || 'N/A'}</div>
-            </div>
-            <div class="detail-item" style="margin-top: 16px;">
-              <div class="detail-label">price</div>
-              <div class="detail-value">${stream.price_per_obs}</div>
             </div>
           </div>
         </td>
@@ -1955,6 +1964,40 @@
         </div>
       `;
       showNotification("Failed to load observations", true);
+    });
+  }
+
+  function buyStream(streamId, event) {
+    event.preventDefault(); // prevent the default action of the button
+    event.stopPropagation(); // prevent the event from bubbling up the DOM tree
+    console.log("buyStream", streamId, event);
+    
+    document.getElementById('modalLoading').style.display = "flex";
+    document.body.classList.add('modal-open');
+    fetch('/market/buy_stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ streamId: streamId })
+    })
+    .then(async (response) => {
+      if (response.ok) {
+        // todo: show that it is successfully bought
+        // todo: show that it's already bought if it is in the first place
+        const data = await response.json();
+        let parsedObservationsAndMostRecent = JSON.parse(data.observations);
+        
+        if (parsedObservations.length === 0) {
+          
+        } else {
+          
+        }
+
+        document.getElementById('modalLoading').style.display = "none";
+      }
+    })
+    .catch(error => {
+      console.error('Error pledging to buy stream:', error);
+      showNotification("Failed to pledge to buy stream", true);
     });
   }
 
