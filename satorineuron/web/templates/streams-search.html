@@ -1488,8 +1488,8 @@
               `<div class="detail-item">
                 <button 
                   class="action-button chart-button" 
-                  id="stream_buy_${stream.stream_id}"
-                  onclick="buyStream(${stream.stream_id}, event);"
+                  id="stream_buy_${stream.uuid}"
+                  onclick="buyStream(${stream.uuid}, event);"
                   title="${stream.price_per_obs > 0 ? 'Buy' : 'Subscribe'}"
                 >${stream.price_per_obs > 0 ? 'Buy' : 'Subscribe'}</button>
               </div>` : ''}
@@ -1967,17 +1967,17 @@
     });
   }
 
-  function buyStream(streamId, event) {
+  function buyStream(streamUuid, event) {
     event.preventDefault(); // prevent the default action of the button
     event.stopPropagation(); // prevent the event from bubbling up the DOM tree
-    console.log("buyStream", streamId, event);
+    console.log("buyStream", streamUuid, event);
     
     document.getElementById('modalLoading').style.display = "flex";
     document.body.classList.add('modal-open');
     fetch('/market/buy_stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ streamId: streamId })
+      body: JSON.stringify({ streamUuid: streamUuid })
     })
     .then(async (response) => {
       if (response.ok) {

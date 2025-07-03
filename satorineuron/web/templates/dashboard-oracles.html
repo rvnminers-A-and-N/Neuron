@@ -47,6 +47,7 @@
               <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Payload</th>
               <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Hook</th>
               <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">History</th>
+              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Price</th>
             </tr>
           </thead>
             <tbody id="updating_table">
@@ -207,6 +208,21 @@
                       {% else %} {{ existingRelayStream['history'] }}
                       {% endif %}
                     </h6>
+                  </div>
+                </td>
+                <td >
+                  <div class="d-flex px-3 py-1">
+                    <input type="number" 
+                           class="form-control form-control-sm price-input {% if darkmode %}dark-colors dark-text{% endif %}" 
+                           value="{{ existingRelayStream['price_per_obs'] }}" 
+                           min="0" 
+                           step="0.01" 
+                           style="width: 80px; font-size: 0.875rem;"
+                           data-original-price="{{ existingRelayStream['price_per_obs'] }}"
+                           data-stream-uuid="{{ existingRelayStream['uuid'] }}"
+                           onkeypress="handlePriceKeyPress(event, this)"
+                           onblur="handlePriceBlur(this)"
+                           title="Click to edit price per observation">
                   </div>
                 </td>
               </tr>
@@ -413,6 +429,54 @@
     </div>
   </div>
 </div>
+
+<style>
+  .price-input {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    transition: all 0.2s ease;
+  }
+  
+  .price-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: none;
+  }
+  
+  .price-input.dark-colors {
+    background-color: #2c2c2c;
+    border-color: #555;
+    color: #fff;
+  }
+  
+  .price-input.dark-colors:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  }
+  
+  .price-input.dark-colors.dark-text {
+    color: #fff;
+  }
+  
+  .price-input:invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+  }
+  
+  .price-input.is-loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .price-input.is-loading:disabled {
+    background-color: #f8f9fa;
+  }
+  
+  .price-input.dark-colors.is-loading:disabled {
+    background-color: #3c3c3c;
+  }
+</style>
 
 <script>
   const fileMergeInput = document.getElementById('mergeDatastreamHistory');
@@ -683,6 +747,94 @@
             console.log("Action canceled.");
         }
     }
-});
+  });
+
+  // Price editing functions
+  function handlePriceKeyPress(event, input) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      updatePrice(input);
+    }
+  }
+
+  function handlePriceBlur(input) {
+    // If the input is empty or invalid, restore the original price
+    const value = parseFloat(input.value);
+    const originalPrice = parseFloat(input.getAttribute('data-original-price'));
+    
+    if (isNaN(value) || value < 0) {
+      input.value = originalPrice;
+      input.classList.remove('is-invalid');
+      return;
+    }
+    
+    // Only update if the value has actually changed
+    if (value !== originalPrice) {
+      updatePrice(input);
+    }
+  }
+
+  function updatePrice(input) {
+    const value = parseFloat(input.value);
+    const originalPrice = parseFloat(input.getAttribute('data-original-price'));
+    const streamUuid = input.getAttribute('data-stream-uuid');
+    
+    // Validate input
+    if (isNaN(value) || value < 0) {
+      showMessage('Price must be a positive number', 'error');
+      input.value = originalPrice;
+      input.classList.remove('is-invalid');
+      return;
+    }
+    
+    // Don't update if value hasn't changed
+    if (value === originalPrice) {
+      return;
+    }
+    
+    // Add loading state
+    input.disabled = true;
+    input.classList.add('is-loading');
+    showWorking();
+    
+    fetch('/market/streams/set/price', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        streamUuid: streamUuid,
+        pricePerObs: value
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.message) {
+        showMessage(data.message, 'success');
+        // Update the original price attribute to the new value
+        input.setAttribute('data-original-price', value);
+      } else {
+        showMessage('Price updated successfully', 'success');
+        input.setAttribute('data-original-price', value);
+      }
+      input.disabled = false;
+      input.classList.remove('is-loading');
+      hideWorking();
+    })
+    .catch(error => {
+      console.error('Error updating price:', error);
+      showMessage('Failed to update price: ' + error.message, 'error');
+      // Restore original value on error
+      input.value = originalPrice;
+      input.disabled = false;
+      input.classList.remove('is-loading');
+      hideWorking();
+    });
+  }
 </script>
 {% endblock %}

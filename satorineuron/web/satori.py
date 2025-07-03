@@ -1384,7 +1384,8 @@ def dashboard():
                     **{'latest': start.relay.latest.get(stream.streamId.jsonId, '')},
                     **{'late': start.relay.late(stream.streamId, timeToSeconds(time.time()))},
                     **{'cadenceStr': deduceCadenceString(stream.cadence)},
-                    **{'offsetStr': deduceOffsetString(stream.offset)}}
+                    **{'offsetStr': deduceOffsetString(stream.offset)},
+                    **{'uuid': stream.streamId.uuid}}
                 for stream in start.relay.streams]
             if start.relay is not None else []),
 
@@ -2281,6 +2282,28 @@ def streams_api():
     except Exception as e:
         logging.error(f"Error in streams_api: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/market/streams/set/price', methods=['POST'])
+@authRequired
+def marketSetPrice():
+    streamUuid = request.json.get('streamUuid', "")
+    pricePerObs = request.json.get('pricePerObs', "")
+    success = start.server.marketStreamsSetPrice(streamUuid=streamUuid, pricePerObs=pricePerObs)
+    if success:
+        return jsonify({'message': 'Price updated successfully'}), 200
+    else:
+        return jsonify({'message': 'Failed to update price'}), 400
+
+@app.route('/market/buy_stream', methods=['POST'])
+@authRequired
+def marketBuyStream():
+    # todo: go through start?
+    streamUuid = request.json.get('streamUuid', "")
+    success = start.server.marketBuyStream(streamUuid=streamUuid)
+    if success:
+        return jsonify({'message': 'Stream purchased successfully'}), 200
+    else:
+        return jsonify({'message': 'Failed to purchase stream'}), 400
 
 
 @app.route('/vote_on/sanction/incremental', methods=['POST'])
