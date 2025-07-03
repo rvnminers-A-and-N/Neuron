@@ -1013,6 +1013,8 @@
 <script type="text/javascript">
   const darkmode = {{ 'true' if darkmode else 'false' }};
   const hasRoom = {{ 'true' if hasRoom else 'false' }};
+  const subscribedUuids = {{ subscribed_uuids | tojson }};
+  const publishedUuids = {{ published_uuids | tojson }};
   
   // Server-side pagination variables
   let currentPage = 1;
@@ -1484,12 +1486,12 @@
                 <div class="detail-label">price</div>
                 <div class="detail-value">${stream.price_per_obs}</div> 
               </div>
-              ${!{{ subscribed_uuids }}.includes(stream.uuid) && !{{ published_uuids }}.includes(stream.uuid) ? 
+              ${(!subscribedUuids.includes(stream.uuid) && !publishedUuids.includes(stream.uuid)) ? 
               `<div class="detail-item">
                 <button 
                   class="action-button chart-button" 
                   id="stream_buy_${stream.uuid}"
-                  onclick="buyStream(${stream.uuid}, event);"
+                  onclick="buyStream('${stream.uuid}', event);"
                   title="${stream.price_per_obs > 0 ? 'Buy' : 'Subscribe'}"
                 >${stream.price_per_obs > 0 ? 'Buy' : 'Subscribe'}</button>
               </div>` : ''}
@@ -1957,7 +1959,7 @@
         <div style="color: #f44336; text-align: center;">
           <i class="material-icons" style="font-size: 48px; margin-bottom: 16px;">error</i>
           <div>Failed to load observations</div>
-          <button onclick="showObservations(${streamId}, '${streamName}')" 
+          <button onclick="showObservations(${streamId}, '${streamName.replace(/'/g, "\\'")}')" 
                   class="sort-button" style="margin-top: 16px;">
             Retry
           </button>
@@ -1984,20 +1986,22 @@
         // todo: show that it is successfully bought
         // todo: show that it's already bought if it is in the first place
         const data = await response.json();
-        let parsedObservationsAndMostRecent = JSON.parse(data.observations);
-        
-        if (parsedObservations.length === 0) {
-          
-        } else {
-          
-        }
-
+        showNotification("Stream purchased successfully!");
         document.getElementById('modalLoading').style.display = "none";
+        document.body.classList.remove('modal-open');
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
     })
     .catch(error => {
       console.error('Error pledging to buy stream:', error);
-      showNotification("Failed to pledge to buy stream", true);
+      if (error.message.includes('400')) {
+        showNotification("This stream cannot be purchased (price is 0 or invalid)", true);
+      } else {
+        showNotification("Failed to pledge to buy stream", true);
+      }
+      document.getElementById('modalLoading').style.display = "none";
+      document.body.classList.remove('modal-open');
     });
   }
 
