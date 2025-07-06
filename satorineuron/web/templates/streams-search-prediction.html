@@ -1411,8 +1411,8 @@
           <div class="d-flex px-3 py-1">
             <h6 class="mb-0 text-sm ${darkmode ? 'dark-text' : ''}" 
                 style="max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;" 
-                title="${stream.oracle_address}">
-              ${stream.oracle_alias || stream.oracle_address}
+                title="${stream.predictor_address}">
+              ${stream.predictor_alias || stream.predictor_address}
             </h6>
           </div>
         </td>
@@ -1451,6 +1451,10 @@
               <div class="detail-item">
                 <div class="detail-label">Created</div>
                 <div class="detail-value">${stream.stream_created_ts}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Predictor Address</div>
+                <div class="detail-value" style="word-break: break-all;">${stream.predictor_address}</div>
               </div>
               <div class="detail-item">
                 <div class="detail-label">Oracle Address</div>
