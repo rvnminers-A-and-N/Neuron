@@ -108,7 +108,7 @@
                            step="0.01" 
                            style="width: 80px; font-size: 0.875rem;"
                            data-original-price="{{ streamOverview.price_per_obs | default(0.0) }}"
-                           data-stream-uuid="{{ streamOverview.uuidPredictor }}"
+                           data-stream-uuid="{{ streamOverview.streamId.uuid }}"
                            onkeypress="handlePredictionPriceKeyPress(event, this)"
                            onblur="handlePredictionPriceBlur(this)"
                            title="Click to edit price per prediction"
@@ -396,7 +396,7 @@
                            step="0.01" 
                            style="width: 80px; font-size: 0.875rem;"
                            data-original-price="${streamOverview.price_per_obs || 0.0}"
-                           data-stream-uuid="${streamOverview.uuidPredictor}"
+                           data-stream-uuid="${streamOverview.streamId.uuid}"
                            onkeypress="handlePredictionPriceKeyPress(event, this)"
                            onblur="handlePredictionPriceBlur(this)"
                            title="Click to edit price per prediction"
@@ -530,11 +530,19 @@
   function handlePredictionPriceKeyPress(event, input) {
     if (event.key === 'Enter') {
       event.preventDefault();
+      // Mark that we're handling this via Enter key to prevent blur from also triggering
+      input.setAttribute('data-handled-by-enter', 'true');
       updatePredictionPrice(input);
     }
   }
 
   function handlePredictionPriceBlur(input) {
+    // If this was already handled by Enter key, don't process again
+    if (input.getAttribute('data-handled-by-enter') === 'true') {
+      input.removeAttribute('data-handled-by-enter');
+      return;
+    }
+    
     // If the input is empty or invalid, restore the original price
     const value = parseFloat(input.value);
     const originalPrice = parseFloat(input.getAttribute('data-original-price'));
@@ -556,11 +564,26 @@
     const originalPrice = parseFloat(input.getAttribute('data-original-price'));
     const streamUuid = input.getAttribute('data-stream-uuid');
     
+    // Debug logging
+    console.log('Updating prediction price:', {
+      value: value,
+      originalPrice: originalPrice,
+      oracleStreamUuid: streamUuid
+    });
+    
     // Validate input
     if (isNaN(value) || value < 0) {
       showMessage('Price must be a positive number', 'error');
       input.value = originalPrice;
       input.classList.remove('is-invalid');
+      return;
+    }
+    
+    // Validate UUID
+    if (!streamUuid || streamUuid === '') {
+      showMessage('Error: No oracle stream UUID found. Please refresh the page and try again.', 'error');
+      input.disabled = false;
+      input.classList.remove('is-loading');
       return;
     }
     
@@ -573,7 +596,7 @@
     input.disabled = true;
     input.classList.add('is-loading');
     
-    fetch('/market/streams/set/price', {
+    fetch('/market/streams/prediction/set/price', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -584,12 +607,20 @@
       })
     })
     .then(response => {
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        // Try to get the error message from the response
+        return response.text().then(text => {
+          console.log('Error response text:', text);
+          throw new Error(`HTTP ${response.status}: ${text}`);
+        });
       }
       return response.json();
     })
     .then(data => {
+      console.log('Success response data:', data);
       if (data.message) {
         showMessage(data.message, 'success');
         // Update the original price attribute to the new value

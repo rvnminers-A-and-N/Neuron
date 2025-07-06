@@ -725,13 +725,14 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         """filter down to prediciton publications"""
         return [s for s in streams if s.predicting is None]
 
-    def streamDisplayer(self, subsription: Stream):
+    def streamDisplayer(self, subsription: Stream, publication: Stream):
         return StreamOverview(
             streamId=subsription.streamId,
             value="",
             prediction="",
             values=[],
-            predictions=[])
+            predictions=[],
+            price_per_obs=publication.price_per_obs if publication is not None else 0.0)
     
     def removePair(self, pub: StreamId, sub: StreamId):
         self.publications = [p for p in self.publications if p.streamId != pub]
@@ -914,9 +915,10 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 self.subscriptions,
                 StartupDag.predictionStreams(self.publications))
             subscriptions, publications = streamPairs.get_matched_pairs()
+            # this is the one that's called (todo: refactor other paths out)
             self.streamDisplay = [
-                self.streamDisplayer(subscription)
-                for subscription in subscriptions]
+                self.streamDisplayer(subscription, publication)
+                for subscription, publication in zip(subscriptions, publications)]
             predictionStreamsToPredict = config.get().get('prediction stream', None)
             if predictionStreamsToPredict is not None:
                 streamsLen = int(predictionStreamsToPredict)
@@ -1147,19 +1149,40 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
     def populateStreamDisplay(self):
 
         def streamDisplayer(subsription: Stream):
+            # Get the price from the stream
+            price_per_obs = 0.0
+            
+            # Debug logging
+            print(f"Creating StreamOverview for: {subsription.streamId.stream}")
+            print(f"  StreamId details: source={subsription.streamId.source}, author={subsription.streamId.author}, stream={subsription.streamId.stream}, target={subsription.streamId.target}")
+            print(f"  StreamId UUID: {subsription.streamId.uuid}")
+            print(f"  StreamId UUID type: {type(subsription.streamId.uuid)}")
+            print(f"  StreamId UUID length: {len(subsription.streamId.uuid) if subsription.streamId.uuid else 0}")
+            
+            # If this is a prediction stream (has predicting field), get its price
+            if hasattr(subsription, 'predicting') and subsription.predicting is not None:
+                if hasattr(subsription, 'price_per_obs') and subsription.price_per_obs is not None:
+                    price_per_obs = subsription.price_per_obs
+            else:
+                # This is an oracle stream, find its prediction stream to get the price
+                for pub in self.publications:
+                    if hasattr(pub, 'predicting') and pub.predicting == subsription.streamId:
+                        if hasattr(pub, 'price_per_obs') and pub.price_per_obs is not None:
+                            price_per_obs = pub.price_per_obs
+                        break
+            
             return StreamOverview(
                 streamId=subsription.streamId,
                 value="",
                 prediction="",
                 values=[],
-                predictions=[])
+                predictions=[],
+                price_per_obs=price_per_obs)
 
+        # Create StreamOverview objects for subscriptions (oracle streams)
         self.streamDisplay = [
             streamDisplayer(subscription)
             for subscription in self.subscriptions]
-        self.streamDisplay = [
-            streamDisplayer(publication)
-            for publication in self.publications]
 
     def pause(self, timeout: int = 60):
         """pause the engine."""

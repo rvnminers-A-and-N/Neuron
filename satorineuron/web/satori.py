@@ -2294,6 +2294,35 @@ def marketSetPrice():
     else:
         return jsonify({'message': 'Failed to update price'}), 400
 
+@app.route('/market/streams/prediction/set/price', methods=['POST'])
+@authRequired
+def marketPredictionSetPrice():
+    # Convert oracle stream UUID to prediction stream UUID using getMatchingStream
+    oracleStreamUuid = request.json.get('streamUuid', "")
+    pricePerObs = request.json.get('pricePerObs', "")
+    
+    # Find the oracle stream by UUID
+    oracleStreamId = None
+    for stream in start.subscriptions:
+        if stream.streamId.uuid == oracleStreamUuid:
+            oracleStreamId = stream.streamId
+            break
+    
+    if oracleStreamId is None:
+        return jsonify({'message': 'Oracle stream not found'}), 400
+    
+    # Get the prediction stream UUID using getMatchingStream
+    predictionStreamId = start.getMatchingStream(oracleStreamId)
+    if predictionStreamId is None:
+        return jsonify({'message': 'Prediction stream not found'}), 400
+    
+    # Update the price using the prediction stream UUID
+    success = start.server.marketStreamsSetPrice(streamUuid=predictionStreamId.uuid, pricePerObs=pricePerObs)
+    if success:
+        return jsonify({'message': 'Price updated successfully'}), 200
+    else:
+        return jsonify({'message': 'Failed to update price'}), 400
+    
 @app.route('/market/buy_stream', methods=['POST'])
 @authRequired
 def marketBuyStream():
