@@ -2306,6 +2306,7 @@ def marketBuyStream():
         return jsonify({'message': 'Failed to purchase stream'}), 400
 
 
+
 @app.route('/vote_on/sanction/incremental', methods=['POST'])
 @authRequired
 def incrementalVote():

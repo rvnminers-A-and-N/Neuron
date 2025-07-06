@@ -45,13 +45,14 @@
                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Target</th>
                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Latest</th>
                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Prediction</th>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Price</th>
                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 {% if darkmode %}dark-colors{% endif %}">Actions</th>
               </tr>
             </thead>
             <tbody id="updating_table">
               {% if streamOverviews|length == 0 %}
               <tr>
-                <td colspan="5">
+                <td colspan="6">
                   <div >
                     <h6 class="mb-0 text-center text-sm">Starting Engine, loading models...</h6>
                   </div>
@@ -96,6 +97,22 @@
                 <td id="td-{{streamOverview.hashed}}-prediction" onclick="scrollOrJumpTo('predictionsbr');setDataChartThree({{streamOverview.values}}, {{streamOverview.prediction | default('null', false)}}, {{streamOverview.predictions}});"> <!--setData(chartOne, {{ streamOverview.predictions }});setData(chartTwo, {{streamOverview.errs}});-->
                   <div class="d-flex px-3 py-1">
                     <h6 class="mb-0 text-sm  {% if darkmode %}dark-text{% endif %}">{{ streamOverview.prediction }}</h6>
+                  </div>
+                </td>
+                <td id="td-{{streamOverview.hashed}}-price">
+                  <div class="d-flex px-3 py-1">
+                    <input type="number" 
+                           class="form-control form-control-sm price-input {% if darkmode %}dark-colors dark-text{% endif %}" 
+                           value="{{ streamOverview.price_per_obs | default(0.0) }}" 
+                           min="0" 
+                           step="0.01" 
+                           style="width: 80px; font-size: 0.875rem;"
+                           data-original-price="{{ streamOverview.price_per_obs | default(0.0) }}"
+                           data-stream-uuid="{{ streamOverview.uuidPredictor }}"
+                           onkeypress="handlePredictionPriceKeyPress(event, this)"
+                           onblur="handlePredictionPriceBlur(this)"
+                           title="Click to edit price per prediction"
+                           onclick="event.stopPropagation();">
                   </div>
                 </td>
                 <td id="td-{{streamOverview.hashed}}-actions">
@@ -162,15 +179,13 @@
   }
 </script>
 <script src="{{ url_for('static', filename='js/plugins/chartjs.min.js') }}"></script>
-{% if darkmode %}
 <script>
-  const lineColor= "rgba(180, 180, 180, .8)";
+  {% if darkmode %}
+  const lineColor = "rgba(180, 180, 180, .8)";
+  {% else %}
+  const lineColor = "rgba(60, 60, 60, .8)";
+  {% endif %}
 </script>
-{% else %}
-<script>
-  const lineColor="rgba(60, 60, 60, .8)";
-</script>
-{% endif %}
 <script>
   function addData(chart, label, data) {
     chart.data.labels.push(label);
@@ -368,11 +383,24 @@
       let tdTarget = document.getElementById("td-" + streamOverview.hashed + "-target");
       let tdValue = document.getElementById("td-" + streamOverview.hashed + "-value");
       let tdPrediction = document.getElementById("td-" + streamOverview.hashed + "-prediction");
+      let tdPrice = document.getElementById("td-" + streamOverview.hashed + "-price");
       let tdActions = document.getElementById("td-" + streamOverview.hashed + "-actions");
       tdStream.onclick = viewOnClick(streamOverview);
       tdTarget.onclick = viewOnClick(streamOverview);
       tdValue.onclick = viewOnClick(streamOverview);
       tdPrediction.onclick = viewOnClick(streamOverview);
+      tdPrice.innerHTML = `<div class="d-flex px-3 py-1"><input type="number" 
+                           class="form-control form-control-sm price-input {% if darkmode %}dark-colors dark-text{% endif %}" 
+                           value="${streamOverview.price_per_obs || 0.0}" 
+                           min="0" 
+                           step="0.01" 
+                           style="width: 80px; font-size: 0.875rem;"
+                           data-original-price="${streamOverview.price_per_obs || 0.0}"
+                           data-stream-uuid="${streamOverview.uuidPredictor}"
+                           onkeypress="handlePredictionPriceKeyPress(event, this)"
+                           onblur="handlePredictionPriceBlur(this)"
+                           title="Click to edit price per prediction"
+                           onclick="event.stopPropagation();"></div>`;
       tdStream.innerHTML = `<div class="d-flex px-3 py-1"><h6 class="mb-0 text-sm  {% if darkmode %}dark-text{% endif %}">` + streamOverview.stream + `</h6></div>`
       tdTarget.innerHTML = `<div class="d-flex px-3 py-1"><h6 class="mb-0 text-sm  {% if darkmode %}dark-text{% endif %}">` + streamOverview.target + `</h6></div>`
       tdValue.innerHTML = `<div class="d-flex px-3 py-1"><h6 class="mb-0 text-sm  {% if darkmode %}dark-text{% endif %}">` + streamOverview.value + `</h6></div>`
@@ -421,6 +449,165 @@
     .catch(error => {
       console.error('Error:', error);
       alert('An error occurred while removing the stream. Please try again.');
+    });
+  }
+</script>
+
+<style>
+  .price-input {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    transition: all 0.2s ease;
+  }
+  
+  .price-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: none;
+  }
+  
+  .price-input.dark-colors {
+    background-color: #2c2c2c;
+    border-color: #555;
+    color: #fff;
+  }
+  
+  .price-input.dark-colors:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  }
+  
+  .price-input.dark-colors.dark-text {
+    color: #fff;
+  }
+  
+  .price-input:invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+  }
+  
+  .price-input.is-loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .price-input.is-loading:disabled {
+    background-color: #f8f9fa;
+  }
+  
+  .price-input.dark-colors.is-loading:disabled {
+    background-color: #3c3c3c;
+  }
+</style>
+
+<script>
+  // Function to show messages
+  function showMessage(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible fade show`;
+    alertDiv.style.position = 'fixed';
+    alertDiv.style.top = '20px';
+    alertDiv.style.right = '20px';
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    alertDiv.innerHTML = `
+        <strong>${type === 'error' ? 'Error:' : 'Success:'}</strong> ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (alertDiv.parentNode) {
+        alertDiv.remove();
+      }
+    }, 5000);
+  }
+
+  // Prediction price editing functions
+  function handlePredictionPriceKeyPress(event, input) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      updatePredictionPrice(input);
+    }
+  }
+
+  function handlePredictionPriceBlur(input) {
+    // If the input is empty or invalid, restore the original price
+    const value = parseFloat(input.value);
+    const originalPrice = parseFloat(input.getAttribute('data-original-price'));
+    
+    if (isNaN(value) || value < 0) {
+      input.value = originalPrice;
+      input.classList.remove('is-invalid');
+      return;
+    }
+    
+    // Only update if the value has actually changed
+    if (value !== originalPrice) {
+      updatePredictionPrice(input);
+    }
+  }
+
+  function updatePredictionPrice(input) {
+    const value = parseFloat(input.value);
+    const originalPrice = parseFloat(input.getAttribute('data-original-price'));
+    const streamUuid = input.getAttribute('data-stream-uuid');
+    
+    // Validate input
+    if (isNaN(value) || value < 0) {
+      showMessage('Price must be a positive number', 'error');
+      input.value = originalPrice;
+      input.classList.remove('is-invalid');
+      return;
+    }
+    
+    // Don't update if value hasn't changed
+    if (value === originalPrice) {
+      return;
+    }
+    
+    // Add loading state
+    input.disabled = true;
+    input.classList.add('is-loading');
+    
+    fetch('/market/streams/set/price', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        streamUuid: streamUuid,
+        pricePerObs: value
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.message) {
+        showMessage(data.message, 'success');
+        // Update the original price attribute to the new value
+        input.setAttribute('data-original-price', value);
+      } else {
+        showMessage('Price updated successfully', 'success');
+        input.setAttribute('data-original-price', value);
+      }
+      input.disabled = false;
+      input.classList.remove('is-loading');
+    })
+    .catch(error => {
+      console.error('Error updating prediction price:', error);
+      showMessage('Failed to update price: ' + error.message, 'error');
+      // Restore original value on error
+      input.value = originalPrice;
+      input.disabled = false;
+      input.classList.remove('is-loading');
     });
   }
 </script>
