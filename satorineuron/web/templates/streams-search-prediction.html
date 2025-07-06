@@ -1112,6 +1112,9 @@
       } else {
           searchButton.classList.remove('animate');
       }
+      
+      // Trigger debounced search
+      debounceSearch();
   }
 
   function clearSearch() {
