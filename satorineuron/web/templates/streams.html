@@ -1,7 +1,11 @@
 {% extends "basic.html" %}
 {% block content %}
 {% if vaultOpened %}
-    {% include 'streams-search.html' %}
+    {% if searchPredictions %}
+        {% include 'streams-search-prediction.html' %}
+    {% else %}
+        {% include 'streams-search.html' %}
+    {% endif %}
     {% include 'footer-on-front.html' %}
 {% else %}
     {% include 'streams-lock.html' %}

@@ -2208,6 +2208,7 @@ def streams():
             'vault': start.vault,
             'vaultOpened': True,
             'vaultPasswordForm': presentVaultPasswordForm(),
+            'searchPredictions': False,
             'hasRoom': len(start.subscriptions) < 10,
             'darkmode': darkmode,
             'streams': [], 
@@ -2220,6 +2221,41 @@ def streams():
             'vaultOpened': False,
             'vaultPasswordForm': presentVaultPasswordForm(),
         }))
+    
+
+@app.route('/streams/prediction', methods=['GET', 'POST'])
+@vaultRequired
+@authRequired
+def streamsPrediction():
+    def acceptSubmittion(passwordForm):
+        _vault = start.openVault(
+            password=passwordForm.password.data,
+            create=True)
+
+    if request.method == 'POST':
+        acceptSubmittion(forms.VaultPassword(formdata=request.form))
+
+    if start.vault is not None and not start.vault.isEncrypted:
+        return render_template('streams.html', **getResp({
+            'title': 'Streams',
+            'network': start.network,
+            'vault': start.vault,
+            'vaultOpened': True,
+            'vaultPasswordForm': presentVaultPasswordForm(),
+            'searchPredictions': True,
+            'hasRoom': len(start.subscriptions) < 10,
+            'darkmode': darkmode,
+            'streams': [], 
+            'subscribed_uuids': [s.streamId.uuid for s in start.subscriptions],
+            'published_uuids': [s.streamId.uuid for s in start.publications],
+            'totalStreams': 0, 
+        }))
+    else:
+        return render_template('dashboard.html', **getResp({
+            'vaultOpened': False,
+            'vaultPasswordForm': presentVaultPasswordForm(),
+        }))
+    
     
     
 @app.route('/streams/api', methods=['GET'])
@@ -2282,6 +2318,69 @@ def streams_api():
     except Exception as e:
         logging.error(f"Error in streams_api: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/streams/prediction/api', methods=['GET'])
+@vaultRequired
+@authRequired
+def streams_prediction_api():
+    """API endpoint for paginated prediction streams data"""
+    try:
+        if start.vault is None or start.vault.isEncrypted:
+            return jsonify({'error': 'Vault not accessible'}), 401
+            
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 100, type=int), 200) 
+        search = request.args.get('search', '').strip()
+        sort_by = request.args.get('sort', 'popularity') 
+        order = request.args.get('order', 'desc')  
+        
+        if page < 1:
+            page = 1
+        if per_page < 1:
+            per_page = 100
+            
+        predictionStreams, pagination_info = start.getPaginatedPredictionStreams(
+            page=page,           
+            per_page=per_page,    
+            searchText=search,     
+            sort_by=sort_by,
+            order=order,
+            force_refresh=True      
+        )
+        
+        if isinstance(pagination_info, dict):
+            response_data = {
+                'streams': predictionStreams,
+                'current_page': pagination_info.get('current_page', page),
+                'total_pages': pagination_info.get('total_pages', 1),
+                'total_count': pagination_info.get('total_count', len(predictionStreams)),
+                'has_prev': pagination_info.get('has_prev', False),
+                'has_next': pagination_info.get('has_next', False),
+                'per_page': pagination_info.get('per_page', per_page)
+            }
+        else:
+            total_count = pagination_info if isinstance(pagination_info, int) else len(predictionStreams)
+            total_pages = (total_count + per_page - 1) // per_page
+            has_prev = page > 1
+            has_next = page < total_pages
+            
+            response_data = {
+                'streams': predictionStreams,
+                'current_page': page,
+                'total_pages': total_pages,
+                'total_count': total_count,
+                'has_prev': has_prev,
+                'has_next': has_next,
+                'per_page': per_page
+            }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logging.error(f"Error in streams_prediction_api: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 
 @app.route('/market/streams/set/price', methods=['POST'])
 @authRequired
@@ -3084,5 +3183,66 @@ if __name__ == '__main__':
 #    return sock
 #
 #run_simple('::', config.flaskPort(), app, threaded=True, request_handler=None, passthrough_errors=True, use_reloader=False)
+
+@app.route('/streams/prediction/api', methods=['GET'])
+@vaultRequired
+@authRequired
+def streams_prediction_api():
+    """API endpoint for paginated prediction streams data"""
+    try:
+        if start.vault is None or start.vault.isEncrypted:
+            return jsonify({'error': 'Vault not accessible'}), 401
+            
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 100, type=int), 200) 
+        search = request.args.get('search', '').strip()
+        sort_by = request.args.get('sort', 'popularity') 
+        order = request.args.get('order', 'desc')  
+        
+        if page < 1:
+            page = 1
+        if per_page < 1:
+            per_page = 100
+            
+        predictionStreams, pagination_info = start.getPaginatedPredictionStreams(
+            page=page,           
+            per_page=per_page,    
+            searchText=search,     
+            sort_by=sort_by,
+            order=order,
+            force_refresh=True      
+        )
+        
+        if isinstance(pagination_info, dict):
+            response_data = {
+                'streams': predictionStreams,
+                'current_page': pagination_info.get('current_page', page),
+                'total_pages': pagination_info.get('total_pages', 1),
+                'total_count': pagination_info.get('total_count', len(predictionStreams)),
+                'has_prev': pagination_info.get('has_prev', False),
+                'has_next': pagination_info.get('has_next', False),
+                'per_page': pagination_info.get('per_page', per_page)
+            }
+        else:
+            total_count = pagination_info if isinstance(pagination_info, int) else len(predictionStreams)
+            total_pages = (total_count + per_page - 1) // per_page
+            has_prev = page > 1
+            has_next = page < total_pages
+            
+            response_data = {
+                'streams': predictionStreams,
+                'current_page': page,
+                'total_pages': total_pages,
+                'total_count': total_count,
+                'has_prev': has_prev,
+                'has_next': has_next,
+                'per_page': per_page
+            }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logging.error(f"Error in streams_prediction_api: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 

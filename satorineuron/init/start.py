@@ -1357,6 +1357,48 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 'per_page': per_page
             }
 
+    def getPaginatedPredictionStreams(self, page: int = 1, per_page: int = 100, searchText: Union[str, None] = None, 
+                            sort_by: str = 'popularity', order: str = 'desc', force_refresh: bool = False) -> tuple[list, dict]:
+        """ Get paginated prediction streams (recommended approach) """
+        try:
+            page = max(1, page)
+            per_page = min(max(1, per_page), 200)
+            
+            offset = (page - 1) * per_page
+            
+            streams, total_count = self.server.getSearchPredictionStreamsPaginated(
+                searchText=searchText,
+                page=page,
+                per_page=per_page,
+                sort_by=sort_by,
+                order=order
+            )
+            
+            total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+            has_prev = page > 1
+            has_next = page < total_pages
+            
+            pagination_info = {
+                'current_page': page,
+                'total_pages': total_pages,
+                'total_count': total_count,
+                'has_prev': has_prev,
+                'has_next': has_next,
+                'per_page': per_page
+            }
+            return streams, pagination_info
+            
+        except Exception as e:
+            logging.error(f"Error in getPaginatedPredictionStreams: {str(e)}")
+            return [], {
+                'current_page': page,
+                'total_pages': 0,
+                'total_count': 0,
+                'has_prev': False,
+                'has_next': False,
+                'per_page': per_page
+            }
+
     def ableToBridge(self):
         if self.lastBridgeTime < time.time() + 60*60*1:
             return True, ''
