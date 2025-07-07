@@ -20,6 +20,7 @@ from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.server import SatoriServerClient
 from satorilib.server.api import CheckinDetails
 from satorilib.pubsub import SatoriPubSubConn
+from satorilib.centrifugo import SatoriCentrifugoClient
 from satorilib.asynchronous import AsyncThread
 import satoriengine
 from satoriengine.veda.data.structs import StreamForecast
@@ -500,6 +501,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.checkin()
         self.getBalances()
         self.pubsConnect()
+        self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
             return
@@ -522,6 +524,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.checkin()
         self.getBalances()
         self.pubsConnect()
+        self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
             return
@@ -777,6 +780,25 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     emergencyRestart=self.emergencyRestart,
                     key=signature.decode() + "|" + self.oracleKey))
 
+    def centrifugoConnect(self):
+        payload = self.server.getCentrifugoToken()
+        token = payload.get('token')
+        if token is None:
+            logging.error("Failed to get centrifugo token")
+            return
+        ws_url = payload.get('ws_url')
+        if ws_url is None:
+            logging.error("Failed to get centrifugo ws_url")
+            return
+        self.centrifugoClient = SatoriCentrifugoClient(
+            centrifugo_ws_url=ws_url,
+            user_id=self.wallet.address,
+            token=token)
+        self.centrifugoClient.connect()
+        for subscription in self.subscriptions:
+            # TODO: we either need ot use the uuid or the streamID from the database, but since we don't want to tie these identities to the database, we want to use the uuid, so we need to modify the centrifugo server to index things by uuid if possible
+            self.centrifugoClient.subscribe_to_stream(subscription.streamId.uuid)
+            # TODO: ask Krishna if we ought to do this elsewhere... like pubsub, do we connect, subscribe and then publish to our own data server? if so should we register a call back to pass it to the data server?
 
     @property
     def isConnectedToServer(self):
@@ -1261,6 +1283,12 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     data=data,
                     observationTime=observationTime,
                     observationHash=observationHash)
+        
+        if self.centrifugoClient is not None and self.centrifugoClient.isConnected():
+            # TODO: we need to figure public to the correct stream according to this topic (by uuid ideally)
+            streamId = StreamId.fromTopic(topic)
+            self.centrifugoClient.publish_to_stream(streamId.uuid, data)
+        
         if toCentral:
             self.server.publish(
                 topic=topic,
@@ -1329,8 +1357,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 page=page,
                 per_page=per_page,
                 sort_by=sort_by,
-                order=order
-            )
+                order=order)
             
             total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
             has_prev = page > 1
@@ -1342,8 +1369,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 'total_count': total_count,
                 'has_prev': has_prev,
                 'has_next': has_next,
-                'per_page': per_page
-            }
+                'per_page': per_page}
             return streams, pagination_info
             
         except Exception as e:
@@ -1354,8 +1380,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 'total_count': 0,
                 'has_prev': False,
                 'has_next': False,
-                'per_page': per_page
-            }
+                'per_page': per_page}
 
     def getPaginatedPredictionStreams(self, page: int = 1, per_page: int = 100, searchText: Union[str, None] = None, 
                             sort_by: str = 'popularity', order: str = 'desc', force_refresh: bool = False) -> tuple[list, dict]:
@@ -1371,8 +1396,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 page=page,
                 per_page=per_page,
                 sort_by=sort_by,
-                order=order
-            )
+                order=order)
             
             total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
             has_prev = page > 1
@@ -1384,8 +1408,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 'total_count': total_count,
                 'has_prev': has_prev,
                 'has_next': has_next,
-                'per_page': per_page
-            }
+                'per_page': per_page}
             return streams, pagination_info
             
         except Exception as e:
@@ -1396,8 +1419,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 'total_count': 0,
                 'has_prev': False,
                 'has_next': False,
-                'per_page': per_page
-            }
+                'per_page': per_page}
 
     def ableToBridge(self):
         if self.lastBridgeTime < time.time() + 60*60*1:
