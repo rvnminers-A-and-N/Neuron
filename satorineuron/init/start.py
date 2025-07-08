@@ -20,7 +20,10 @@ from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.server import SatoriServerClient
 from satorilib.server.api import CheckinDetails
 from satorilib.pubsub import SatoriPubSubConn
-from satorilib.centrifugo import SatoriCentrifugoClient
+from satorilib.centrifugo import (
+    create_centrifugo_client,
+    create_subscription_handler
+)
 from satorilib.asynchronous import AsyncThread
 import satoriengine
 from satoriengine.veda.data.structs import StreamForecast
@@ -136,6 +139,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.publications: list[Stream] = []
         self.subscriptions: list[Stream] = []
         self.pubSubMapping: dict = {}
+        self.centrifugoSubscriptions: list = []
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
         self.data: dict[str, dict[pd.DataFrame, pd.DataFrame]] = {}
         self.streamDisplay: list = []
@@ -501,7 +505,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.checkin()
         self.getBalances()
         self.pubsConnect()
-        self.centrifugoConnect()
+        await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
             return
@@ -524,7 +528,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.checkin()
         self.getBalances()
         self.pubsConnect()
-        self.centrifugoConnect()
+        await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
             return
@@ -780,7 +784,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     emergencyRestart=self.emergencyRestart,
                     key=signature.decode() + "|" + self.oracleKey))
 
-    def centrifugoConnect(self):
+    async def centrifugoConnect(self):
         payload = self.server.getCentrifugoToken()
         token = payload.get('token')
         if token is None:
@@ -790,15 +794,21 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         if ws_url is None:
             logging.error("Failed to get centrifugo ws_url")
             return
-        self.centrifugoClient = SatoriCentrifugoClient(
-            centrifugo_ws_url=ws_url,
-            user_id=self.wallet.address,
-            token=token)
-        self.centrifugoClient.connect()
+        self.centrifugo = create_centrifugo_client(
+            ws_url=ws_url,
+            token=token,
+            on_connected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=True),
+            on_disconnected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=False))
+        self.centrifugo.connect()
+        # TODO: this should be moved to the engine I think, but engine subscribes and neuron publishes
         for subscription in self.subscriptions:
-            # TODO: we either need ot use the uuid or the streamID from the database, but since we don't want to tie these identities to the database, we want to use the uuid, so we need to modify the centrifugo server to index things by uuid if possible
-            self.centrifugoClient.subscribe_to_stream(subscription.streamId.uuid)
-            # TODO: ask Krishna if we ought to do this elsewhere... like pubsub, do we connect, subscribe and then publish to our own data server? if so should we register a call back to pass it to the data server?
+            sub = self.centrifugo.new_subscription(
+                subscription.streamId.uuid, 
+                events=create_subscription_handler(
+                    stream_id=subscription.streamId.uuid,
+                    value_callback=lambda x, y: logging.info(f"Centrifugo Publication: {x}, {y}")))
+            self.centrifugoSubscriptions.append(sub)
+            await sub.subscribe()
 
     @property
     def isConnectedToServer(self):
@@ -1284,11 +1294,19 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     observationTime=observationTime,
                     observationHash=observationHash)
         
-        if self.centrifugoClient is not None and self.centrifugoClient.isConnected():
+        if self.centrifugo is not None and hasattr(self, 'centrifugoSubscriptions'):
             # TODO: we need to figure public to the correct stream according to this topic (by uuid ideally)
             streamId = StreamId.fromTopic(topic)
-            self.centrifugoClient.publish_to_stream(streamId.uuid, data)
-        
+            # Find the subscription for this stream
+            for subscription in self.centrifugoSubscriptions:
+                if subscription.channel == f"streams:{streamId.uuid}":
+                    # Publish your predictions
+                    # run in background, don't wait
+                    asyncio.create_task(subscription.publish(data))
+                    break
+            # alternatively, we could use the `asyncio.run(subscription.publish(data))`
+            # alternatively, we could make publish an async function and call this with `await subscription.publish(data)`
+
         if toCentral:
             self.server.publish(
                 topic=topic,

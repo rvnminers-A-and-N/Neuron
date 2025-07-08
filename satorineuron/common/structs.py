@@ -7,3 +7,4 @@ class ConnectionTo(Enum):
     pubsub = 3
     synergy = 4
     p2p = 5
+    centrifugo = 6
