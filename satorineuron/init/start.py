@@ -22,7 +22,8 @@ from satorilib.server.api import CheckinDetails
 from satorilib.pubsub import SatoriPubSubConn
 from satorilib.centrifugo import (
     create_centrifugo_client,
-    create_subscription_handler
+    create_subscription_handler,
+    publish_to_stream_rest
 )
 from satorilib.asynchronous import AsyncThread
 import satoriengine
@@ -139,6 +140,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.publications: list[Stream] = []
         self.subscriptions: list[Stream] = []
         self.pubSubMapping: dict = {}
+        self.centrifugoToken: str = None
         self.centrifugoSubscriptions: list = []
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
         self.data: dict[str, dict[pd.DataFrame, pd.DataFrame]] = {}
@@ -786,8 +788,8 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
 
     async def centrifugoConnect(self):
         payload = self.server.getCentrifugoToken()
-        token = payload.get('token')
-        if token is None:
+        self.centrifugoToken = payload.get('token')
+        if self.centrifugoToken is None:
             logging.error("Failed to get centrifugo token")
             return
         ws_url = payload.get('ws_url')
@@ -796,7 +798,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
             return
         self.centrifugo = create_centrifugo_client(
             ws_url=ws_url,
-            token=token,
+            token=self.centrifugoToken,
             on_connected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=True),
             on_disconnected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=False))
         self.centrifugo.connect()
@@ -1294,18 +1296,24 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     observationTime=observationTime,
                     observationHash=observationHash)
         
-        if self.centrifugo is not None and hasattr(self, 'centrifugoSubscriptions'):
-            # TODO: we need to figure public to the correct stream according to this topic (by uuid ideally)
-            streamId = StreamId.fromTopic(topic)
-            # Find the subscription for this stream
-            for subscription in self.centrifugoSubscriptions:
-                if subscription.channel == f"streams:{streamId.uuid}":
-                    # Publish your predictions
-                    # run in background, don't wait
-                    asyncio.create_task(subscription.publish(data))
-                    break
-            # alternatively, we could use the `asyncio.run(subscription.publish(data))`
-            # alternatively, we could make publish an async function and call this with `await subscription.publish(data)`
+        # publishing to centrifugo REST API
+        streamId = StreamId.fromTopic(topic)
+        if streamId.uuid:
+            publish_to_stream_rest(stream_uuid=streamId.uuid, data=data, token=self.centrifugoToken)
+
+        # publishing to centrifugo WEBSOCKET (todo: move websocket connection to Engine, and use rest api for publishing here.)
+        #if self.centrifugo is not None and hasattr(self, 'centrifugoSubscriptions'):
+        #    # TODO: we need to figure public to the correct stream according to this topic (by uuid ideally)
+        #    streamId = StreamId.fromTopic(topic)
+        #    # Find the subscription for this stream
+        #    for subscription in self.centrifugoSubscriptions:
+        #        if subscription.channel == f"streams:{streamId.uuid}":
+        #            # Publish your predictions
+        #            # run in background, don't wait
+        #            asyncio.create_task(subscription.publish(data))
+        #            break
+        #    # alternatively, we could use the `asyncio.run(subscription.publish(data))`
+        #    # alternatively, we could make publish an async function and call this with `await subscription.publish(data)`
 
         if toCentral:
             self.server.publish(
