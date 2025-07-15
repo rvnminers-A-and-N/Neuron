@@ -806,7 +806,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
             on_disconnected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=False))
         await self.centrifugo.connect()
         for subscription in self.subscriptions:
-            sub = subscribe_to_stream(
+            sub = await subscribe_to_stream(
                 client=self.centrifugo,
                 stream_uuid=subscription.streamId.uuid, 
                 events=create_subscription_handler(

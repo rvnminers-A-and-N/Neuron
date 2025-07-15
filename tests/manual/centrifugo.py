@@ -29,13 +29,14 @@ async def testCentrifugoToken(payload):
     await client.connect()
     # Create subscription handler
     subscription_handler = create_subscription_handler(
-        stream_id=streamUuidSub1, 
+        stream_uuid=streamUuidSub1, 
         value_callback=lambda x, y: logging.info(f"Centrifugo Publication: {x}, {y}")
     )    
     # Publish to stream
-    #await client.publish(streamUuidPub1, '0.10101')
+    #publish_to_stream_rest(stream_uuid=streamUuidPub1, data='0.10101', token=payload['token'])
     # Subscribe to stream
     subscription = await subscribe_to_stream(client, streamUuidSub1, subscription_handler)
+    # wait to get data? idk:
     x = 0
     while True:
         await asyncio.sleep(1)
@@ -53,15 +54,15 @@ asyncio.run(testCentrifugoToken(payload))
 #streamUuidPub2 = 'c238ee85-9909-5765-a148-a4afa398998b'
 
 # Test centrifuge-python
-try:
-    from centrifuge import Client
-    print("✅ centrifuge-python imports successfully")
-except ImportError as e:
-    print(f"❌ centrifuge-python import failed: {e}")
-
-# Test web3
-try:
-    from web3 import Web3
-    print("✅ web3 imports successfully")
-except Exception as e:
-    print(f"❌ web3 import failed: {e}")
+#$try:
+#$    from centrifuge import Client
+#$    print("✅ centrifuge-python imports successfully")
+#$except ImportError as e:
+#$    print(f"❌ centrifuge-python import failed: {e}")
+#$
+#$# Test web3
+#$try:
+#$    from web3 import Web3
+#$    print("✅ web3 imports successfully")
+#$except Exception as e:
+#$    print(f"❌ web3 import failed: {e}")
