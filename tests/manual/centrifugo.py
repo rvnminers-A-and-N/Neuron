@@ -36,7 +36,8 @@ async def testCentrifugoToken(payload):
     #publish_to_stream_rest(stream_uuid=streamUuidPub1, data='0.10101', token=payload['token'])
     # Subscribe to stream
     subscription = await subscribe_to_stream(client, streamUuidSub1, subscription_handler)
-    # wait to get data? idk:
+    print(subscription)
+    # keep alive - simulate the engine continuing to run
     x = 0
     while True:
         await asyncio.sleep(1)
