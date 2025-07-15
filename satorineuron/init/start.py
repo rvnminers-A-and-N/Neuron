@@ -23,6 +23,7 @@ from satorilib.pubsub import SatoriPubSubConn
 from satorilib.centrifugo import (
     create_centrifugo_client,
     create_subscription_handler,
+    subscribe_to_stream,
     publish_to_stream_rest
 )
 from satorilib.asynchronous import AsyncThread
@@ -796,18 +797,20 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         if ws_url is None:
             logging.error("Failed to get centrifugo ws_url")
             return
+        # TODO: pass the token (entire payload) to the engine...
+        # TODO: this should be moved to the engine I think, but engine subscribes and neuron publishes
         self.centrifugo = await create_centrifugo_client(
             ws_url=ws_url,
             token=self.centrifugoToken,
             on_connected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=True),
             on_disconnected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=False))
         await self.centrifugo.connect()
-        # TODO: this should be moved to the engine I think, but engine subscribes and neuron publishes
         for subscription in self.subscriptions:
-            sub = self.centrifugo.new_subscription(
-                subscription.streamId.uuid, 
+            sub = subscribe_to_stream(
+                client=self.centrifugo,
+                stream_uuid=subscription.streamId.uuid, 
                 events=create_subscription_handler(
-                    stream_id=subscription.streamId.uuid,
+                    stream_uuid=subscription.streamId.uuid,
                     value_callback=lambda x, y: logging.info(f"Centrifugo Publication: {x}, {y}")))
             self.centrifugoSubscriptions.append(sub)
             await sub.subscribe()
@@ -1299,7 +1302,13 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         # publishing to centrifugo REST API
         streamId = StreamId.fromTopic(topic)
         if streamId.uuid:
-            publish_to_stream_rest(stream_uuid=streamId.uuid, data=data, token=self.centrifugoToken)
+            response = publish_to_stream_rest(
+                stream_uuid=streamId.uuid,
+                data=data,
+                token=self.centrifugoToken,
+                # TODO: update centrifugo to accept observationTime and observationHash just like central and pubsubs do
+            )
+            # TODO: handle response if necessary
 
         # publishing to centrifugo WEBSOCKET (todo: move websocket connection to Engine, and use rest api for publishing here.)
         #if self.centrifugo is not None and hasattr(self, 'centrifugoSubscriptions'):
