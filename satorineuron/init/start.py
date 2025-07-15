@@ -508,7 +508,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.checkin()
         self.getBalances()
         self.pubsConnect()
-        await self.centrifugoConnect()
+        #await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
             return
@@ -531,7 +531,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.checkin()
         self.getBalances()
         self.pubsConnect()
-        await self.centrifugoConnect()
+        #await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
             return
@@ -1300,15 +1300,15 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     observationHash=observationHash)
         
         # publishing to centrifugo REST API
-        streamId = StreamId.fromTopic(topic)
-        if streamId.uuid:
-            response = publish_to_stream_rest(
-                stream_uuid=streamId.uuid,
-                data=data,
-                token=self.centrifugoToken,
-                # TODO: update centrifugo to accept observationTime and observationHash just like central and pubsubs do
-            )
-            # TODO: handle response if necessary
+        ##streamId = StreamId.fromTopic(topic)
+        ##if streamId.uuid:
+        ##    response = publish_to_stream_rest(
+        ##        stream_uuid=streamId.uuid,
+        ##        data=data,
+        ##        token=self.centrifugoToken,
+        ##        # TODO: update centrifugo to accept observationTime and observationHash just like central and pubsubs do
+        ##    )
+        ##    # TODO: handle response if necessary
 
         # publishing to centrifugo WEBSOCKET (todo: move websocket connection to Engine, and use rest api for publishing here.)
         #if self.centrifugo is not None and hasattr(self, 'centrifugoSubscriptions'):
