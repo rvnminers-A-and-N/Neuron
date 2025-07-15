@@ -796,12 +796,12 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         if ws_url is None:
             logging.error("Failed to get centrifugo ws_url")
             return
-        self.centrifugo = create_centrifugo_client(
+        self.centrifugo = await create_centrifugo_client(
             ws_url=ws_url,
             token=self.centrifugoToken,
             on_connected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=True),
             on_disconnected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=False))
-        self.centrifugo.connect()
+        await self.centrifugo.connect()
         # TODO: this should be moved to the engine I think, but engine subscribes and neuron publishes
         for subscription in self.subscriptions:
             sub = self.centrifugo.new_subscription(
