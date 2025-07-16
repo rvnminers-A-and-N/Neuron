@@ -20,12 +20,7 @@ from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.server import SatoriServerClient
 from satorilib.server.api import CheckinDetails
 from satorilib.pubsub import SatoriPubSubConn
-from satorilib.centrifugo import (
-    create_centrifugo_client,
-    create_subscription_handler,
-    subscribe_to_stream,
-    publish_to_stream_rest
-)
+from satorilib.centrifugo import publish_to_stream_rest
 from satorilib.asynchronous import AsyncThread
 import satoriengine
 from satoriengine.veda.data.structs import StreamForecast
@@ -142,7 +137,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.subscriptions: list[Stream] = []
         self.pubSubMapping: dict = {}
         self.centrifugoToken: str = None
-        self.centrifugoSubscriptions: list = []
+        self.centrifugoPayload: dict = None
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
         self.data: dict[str, dict[pd.DataFrame, pd.DataFrame]] = {}
         self.streamDisplay: list = []
@@ -508,7 +503,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.checkin()
         self.getBalances()
         self.pubsConnect()
-        #await self.centrifugoConnect()
+        await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
             return
@@ -788,32 +783,13 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     key=signature.decode() + "|" + self.oracleKey))
 
     async def centrifugoConnect(self):
-        payload = self.server.getCentrifugoToken()
-        self.centrifugoToken = payload.get('token')
+        self.centrifugoPayload = self.server.getCentrifugoToken()
+        self.centrifugoToken = self.centrifugoPayload.get('token')
         if self.centrifugoToken is None:
             logging.error("Failed to get centrifugo token")
             return
-        ws_url = payload.get('ws_url')
-        if ws_url is None:
-            logging.error("Failed to get centrifugo ws_url")
-            return
-        # TODO: pass the token (entire payload) to the engine...
-        # TODO: this should be moved to the engine I think, but engine subscribes and neuron publishes
-        self.centrifugo = await create_centrifugo_client(
-            ws_url=ws_url,
-            token=self.centrifugoToken,
-            on_connected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=True),
-            on_disconnected_callback=lambda x: self.updateConnectionStatus(connTo=ConnectionTo.centrifugo, status=False))
-        await self.centrifugo.connect()
-        for subscription in self.subscriptions:
-            sub = await subscribe_to_stream(
-                client=self.centrifugo,
-                stream_uuid=subscription.streamId.uuid, 
-                events=create_subscription_handler(
-                    stream_uuid=subscription.streamId.uuid,
-                    value_callback=lambda x, y: logging.info(f"Centrifugo Publication: {x}, {y}")))
-            self.centrifugoSubscriptions.append(sub)
-            await sub.subscribe()
+        # Token will be passed to Engine via transferProtocolPayload
+        # Neuron only publishes, Engine subscribes
 
     @property
     def isConnectedToServer(self):
@@ -1032,13 +1008,29 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
             }
             self.pubSubMapping['transferProtocol'] = self.transferProtocol
 
+            # Include Centrifugo token for all transfer protocols if available
+            centrifugoData = None
+            if self.centrifugoPayload:
+                centrifugoData = {
+                    'centrifugo': {
+                        'token': self.centrifugoPayload.get('token'),
+                        'ws_url': self.centrifugoPayload.get('ws_url'),
+                        'expires_at': self.centrifugoPayload.get('expires_at'),
+                        'user_id': self.centrifugoPayload.get('user_id')
+                    }
+                }
+
             if self.transferProtocol == 'p2p-proactive-pubsub': # p2p-proactive-pubsub
-                self.pubSubMapping['transferProtocolPayload'] = mySubscribers if success else {}
+                self.pubSubMapping['transferProtocolPayload'] = {
+                    **(mySubscribers if success else {}),
+                    **(centrifugoData or {})
+                }
                 self.pubSubMapping['transferProtocolKey'] = self.key
             elif self.transferProtocol == 'p2p-pubsub':
                 self.pubSubMapping['transferProtocolKey'] = self.key
+                self.pubSubMapping['transferProtocolPayload'] = centrifugoData
             else:
-                self.pubSubMapping['transferProtocolPayload'] = None
+                self.pubSubMapping['transferProtocolPayload'] = centrifugoData
 
         async def _sendPubSubMapping():
             """ send pub-sub mapping with peer informations to the DataServer """
@@ -1300,15 +1292,25 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     observationHash=observationHash)
         
         # publishing to centrifugo REST API
-        ##streamId = StreamId.fromTopic(topic)
-        ##if streamId.uuid:
-        ##    response = publish_to_stream_rest(
-        ##        stream_uuid=streamId.uuid,
-        ##        data=data,
-        ##        token=self.centrifugoToken,
-        ##        # TODO: update centrifugo to accept observationTime and observationHash just like central and pubsubs do
-        ##    )
-        ##    # TODO: handle response if necessary
+        if self.centrifugoToken and not isPrediction:
+            try:
+                streamId = StreamId.fromTopic(topic)
+                if streamId.uuid:
+                    # Format data to include all fields
+                    centrifugo_data = {
+                        'value': data,
+                        'time': observationTime,
+                        'hash': observationHash
+                    }
+                    response = publish_to_stream_rest(
+                        stream_uuid=streamId.uuid,
+                        data=centrifugo_data,
+                        token=self.centrifugoToken
+                    )
+                    if response.status_code != 200:
+                        logging.warning(f"Centrifugo publish failed: {response.status_code}")
+            except Exception as e:
+                logging.error(f"Error publishing to Centrifugo: {e}")
 
         # publishing to centrifugo WEBSOCKET (todo: move websocket connection to Engine, and use rest api for publishing here.)
         #if self.centrifugo is not None and hasattr(self, 'centrifugoSubscriptions'):
