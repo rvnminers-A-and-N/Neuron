@@ -9,6 +9,7 @@ def testCentralGetCentrifugoToken():
     server = SatoriServerClient(w, urlServer)
     payload = server.getCentrifugoToken()
     assert payload is not None
+    print(f"Centrifugo payload: {payload}")
     return payload
 
 async def testCentrifugoToken(payload):
