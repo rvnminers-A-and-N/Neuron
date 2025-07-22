@@ -1298,7 +1298,8 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 if streamId.uuid:
                     # Format data to include all fields
                     centrifugo_data = {
-                        'value': data,
+                        'topic': topic,
+                        'date': data,
                         'time': observationTime,
                         'hash': observationHash
                     }
