@@ -22,13 +22,13 @@ from satorilib.server.api import CheckinDetails
 from satorilib.pubsub import SatoriPubSubConn
 from satorilib.centrifugo import publish_to_stream_rest
 from satorilib.asynchronous import AsyncThread
-import satoriengine
+# import satoriengine
 from satoriengine.veda.data.structs import StreamForecast
 import satorineuron
 from satorineuron import VERSION
 from satorineuron import logging
 from satorineuron import config
-from satorineuron.init import engine
+# from satorineuron.init import engine
 from satorineuron.init.tag import LatestTag, Version
 from satorineuron.init.wallet import WalletManager
 from satorineuron.common.structs import ConnectionTo
@@ -132,7 +132,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.sub: SatoriPubSubConn = None
         self.pubs: list[SatoriPubSubConn] = []
         self.relay: RawStreamRelayEngine = None
-        self.engine: satoriengine.Engine
+        # self.engine: satoriengine.Engine
         self.publications: list[Stream] = []
         self.subscriptions: list[Stream] = []
         self.pubSubMapping: dict = {}
@@ -502,7 +502,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.createServerConn()
         self.checkin()
         self.getBalances()
-        self.pubsConnect()
+        # self.pubsConnect()
         await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
@@ -525,7 +525,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.createServerConn()
         self.checkin()
         self.getBalances()
-        self.pubsConnect()
+        # self.pubsConnect()
         #await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
@@ -763,24 +763,24 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         if self.aiengine is not None:
             self.aiengine.addStream(stream, publication)
 
-    def pubsConnect(self):
-        """
-        oracle nodes publish to every pubsub machine. therefore, they have
-        an additional set of connections that they mush push to.
-        """
-        self.pubs = []
-        # oracles = oracleStreams(self.publications)
-        if not self.oracleKey:
-            return
-        for pubsubMachine in self.urlPubsubs:
-            signature = self.wallet.sign(self.oracleKey)
-            self.pubs.append(
-                engine.establishConnection(
-                    subscription=False,
-                    url=pubsubMachine,
-                    pubkey=self.wallet.pubkey + ":publishing",
-                    emergencyRestart=self.emergencyRestart,
-                    key=signature.decode() + "|" + self.oracleKey))
+    # def pubsConnect(self):
+    #     """
+    #     oracle nodes publish to every pubsub machine. therefore, they have
+    #     an additional set of connections that they mush push to.
+    #     """
+    #     self.pubs = []
+    #     # oracles = oracleStreams(self.publications)
+    #     if not self.oracleKey:
+    #         return
+    #     for pubsubMachine in self.urlPubsubs:
+    #         signature = self.wallet.sign(self.oracleKey)
+    #         self.pubs.append(
+    #             engine.establishConnection(
+    #                 subscription=False,
+    #                 url=pubsubMachine,
+    #                 pubkey=self.wallet.pubkey + ":publishing",
+    #                 emergencyRestart=self.emergencyRestart,
+    #                 key=signature.decode() + "|" + self.oracleKey))
 
     async def centrifugoConnect(self):
         self.centrifugoPayload = self.server.getCentrifugoToken()
