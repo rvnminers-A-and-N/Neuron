@@ -35,7 +35,23 @@ async def testCentrifugoSubscription(client, streamUuidSub):
     
 async def testCentrifugoPublication(client, payload, streamUuidPub):
     from satorilib.centrifugo import publish_to_stream_rest
-    publish_to_stream_rest(stream_uuid=streamUuidPub, data='0.10101', token=payload['token'])
+    import json
+    from datetime import datetime, timezone
+    
+    # Create proper data structure that matches what neurons actually send
+    observation_data = {
+        "topic": f"stream_{streamUuidPub}",
+        "date": "0.10103",  # Note: "date" field contains the actual data value (legacy naming)
+        "time": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),  # ISO format timestamp
+        "hash": "test_hash_123"
+    }
+    
+    # Send as JSON string (how neurons actually send data)
+    publish_to_stream_rest(
+        stream_uuid=streamUuidPub, 
+        data=json.dumps(observation_data), 
+        token=payload['token']
+    )
 
 async def waitForLogs(client):
     ''' keep alive - simulate the engine continuing to run '''
@@ -53,7 +69,7 @@ async def testCentrifugo(test_subcription: bool = True, test_publication: bool =
     if test_subcription:
         await testCentrifugoSubscription(client, streamUuidSub='003c3ae6-c2d0-5793-95bc-f9de0a279522') # remotePublishers
     if test_publication:
-        await testCentrifugoPublication(client, payload, streamUuidPub='0c6d4691-f0c2-5455-ad65-87358a21943a')
+        await testCentrifugoPublication(client, payload, streamUuidPub='24325852-b12e-5a06-b293-60f1010d9b06')  # Use a stream from hostInfo (your owned streams)
     await waitForLogs(client)
 
 
