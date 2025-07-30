@@ -40,16 +40,15 @@ async def testCentrifugoPublication(client, payload, streamUuidPub):
     
     # Create proper data structure that matches what neurons actually send
     observation_data = {
-        "topic": f"stream_{streamUuidPub}",
-        "date": "0.10103",  # Note: "date" field contains the actual data value (legacy naming)
+        "value": "0.6969",  # The actual data value
         "time": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),  # ISO format timestamp
         "hash": "test_hash_123"
     }
     
-    # Send as JSON string (how neurons actually send data)
+    # Send as dict (Centrifugo expects dict, not JSON string)
     publish_to_stream_rest(
         stream_uuid=streamUuidPub, 
-        data=json.dumps(observation_data), 
+        data=observation_data,  
         token=payload['token']
     )
 
@@ -67,9 +66,9 @@ async def testCentrifugo(test_subcription: bool = True, test_publication: bool =
     payload = testCentralGetCentrifugoToken()
     client = await testCentrifugoToken(payload)
     if test_subcription:
-        await testCentrifugoSubscription(client, streamUuidSub='003c3ae6-c2d0-5793-95bc-f9de0a279522') # remotePublishers
+        await testCentrifugoSubscription(client, streamUuidSub='03331dab-aaed-5a61-852e-8006d66588ba') 
     if test_publication:
-        await testCentrifugoPublication(client, payload, streamUuidPub='24325852-b12e-5a06-b293-60f1010d9b06')  # Use a stream from hostInfo (your owned streams)
+        await testCentrifugoPublication(client, payload, streamUuidPub='03331dab-aaed-5a61-852e-8006d66588ba')  
     await waitForLogs(client)
 
 

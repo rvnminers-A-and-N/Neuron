@@ -1283,13 +1283,13 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         # does this take proxy into account? I don't think so.
         # if self.holdingBalance < constants.stakeRequired:
         #    return False
-        if not isPrediction:
-            for pub in self.pubs:
-                pub.publish(
-                    topic=topic,
-                    data=data,
-                    observationTime=observationTime,
-                    observationHash=observationHash)
+        # if not isPrediction:
+        #     for pub in self.pubs:
+        #         pub.publish(
+        #             topic=topic,
+        #             data=data,
+        #             observationTime=observationTime,
+        #             observationHash=observationHash)
         
         # publishing to centrifugo REST API
         if self.centrifugoToken and not isPrediction:
@@ -1298,8 +1298,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 if streamId.uuid:
                     # Format data to include all fields
                     centrifugo_data = {
-                        'topic': topic,
-                        'date': data,
+                        'value': data,
                         'time': observationTime,
                         'hash': observationHash
                     }
