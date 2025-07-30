@@ -19,7 +19,6 @@ from satorilib.wallet import EvrmoreWallet
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.server import SatoriServerClient
 from satorilib.server.api import CheckinDetails
-from satorilib.pubsub import SatoriPubSubConn
 from satorilib.centrifugo import publish_to_stream_rest
 from satorilib.asynchronous import AsyncThread
 # import satoriengine
@@ -67,7 +66,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         sendToUI: Callable = None,
         urlServer: str = None,
         urlMundo: str = None,
-        urlPubsubs: list[str] = None,
         isDebug: bool = False,
     ) -> 'StartupDag':
         '''Factory method to create and initialize StartupDag asynchronously'''
@@ -78,7 +76,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
             sendToUI=sendToUI,
             urlServer=urlServer,
             urlMundo=urlMundo,
-            urlPubsubs=urlPubsubs,
             isDebug=isDebug)
         await startupDag.startFunction()
         return startupDag
@@ -91,7 +88,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         sendToUI: Callable = None,
         urlServer: str = None,
         urlMundo: str = None,
-        urlPubsubs: list[str] = None,
         isDebug: bool = False,
     ):
         super(StartupDag, self).__init__(*args)
@@ -113,7 +109,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.latestConnectionStatus: dict = {}
         self.urlServer: str = urlServer
         self.urlMundo: str = urlMundo
-        self.urlPubsubs: list[str] = urlPubsubs
         self.paused: bool = False
         self.pauseThread: Union[threading.Thread, None] = None
         self.details: CheckinDetails = CheckinDetails(raw={})
@@ -129,8 +124,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.dataServerPort: Union[int, None] =  None
         self.dataClient: Union[DataClient, None] = None
         self.allOracleStreams = None
-        self.sub: SatoriPubSubConn = None
-        self.pubs: list[SatoriPubSubConn] = []
         self.relay: RawStreamRelayEngine = None
         # self.engine: satoriengine.Engine
         self.publications: list[Stream] = []
@@ -502,7 +495,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.createServerConn()
         self.checkin()
         self.getBalances()
-        # self.pubsConnect()
         await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
@@ -525,7 +517,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         self.createServerConn()
         self.checkin()
         self.getBalances()
-        # self.pubsConnect()
         #await self.centrifugoConnect()
         await self.dataServerFinalize() 
         if self.isDebug:
@@ -763,24 +754,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         if self.aiengine is not None:
             self.aiengine.addStream(stream, publication)
 
-    # def pubsConnect(self):
-    #     """
-    #     oracle nodes publish to every pubsub machine. therefore, they have
-    #     an additional set of connections that they mush push to.
-    #     """
-    #     self.pubs = []
-    #     # oracles = oracleStreams(self.publications)
-    #     if not self.oracleKey:
-    #         return
-    #     for pubsubMachine in self.urlPubsubs:
-    #         signature = self.wallet.sign(self.oracleKey)
-    #         self.pubs.append(
-    #             engine.establishConnection(
-    #                 subscription=False,
-    #                 url=pubsubMachine,
-    #                 pubkey=self.wallet.pubkey + ":publishing",
-    #                 emergencyRestart=self.emergencyRestart,
-    #                 key=signature.decode() + "|" + self.oracleKey))
 
     async def centrifugoConnect(self):
         self.centrifugoPayload = self.server.getCentrifugoToken()
@@ -1280,16 +1253,6 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         isPrediction: bool = False,
     ) -> True:
         """publishes to all the pubsub servers"""
-        # does this take proxy into account? I don't think so.
-        # if self.holdingBalance < constants.stakeRequired:
-        #    return False
-        # if not isPrediction:
-        #     for pub in self.pubs:
-        #         pub.publish(
-        #             topic=topic,
-        #             data=data,
-        #             observationTime=observationTime,
-        #             observationHash=observationHash)
         
         # publishing to centrifugo REST API
         if self.centrifugoToken and not isPrediction:
