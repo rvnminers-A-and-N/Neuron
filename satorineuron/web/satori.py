@@ -1811,6 +1811,19 @@ def reportVault(network: str = 'main'):
     vault = start.getVault()
     if vault.isEncrypted:
         return redirect('/vault')
+    
+    # Check if vault is already registered by looking at the details
+    if hasattr(start, 'details') and start.details:
+        # CheckinDetails might not be a regular dict, try to access vault info
+        try:
+            vault_details = start.details.get('vault')
+            if vault_details and vault_details.get('address') == vault.address:
+                # Vault is already registered
+                return 'Vault already registered', 200
+        except Exception:
+            # If we can't check, proceed with registration attempt
+            pass
+    
     vaultAddress = vault.address
     success, result = start.server.registerVault(
         walletSignature=start.getWallet().sign(vaultAddress),
@@ -1819,6 +1832,9 @@ def reportVault(network: str = 'main'):
         address=vaultAddress)
     if success:
         return 'OK', 200
+    # If the error is "wallet already exists", treat it as success
+    if 'already exists' in str(result).lower():
+        return 'Vault already registered', 200
     return f'Failed to register vault: {result}', 400
 
 
