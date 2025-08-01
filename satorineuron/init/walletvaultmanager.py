@@ -226,9 +226,10 @@ class WalletVaultManager():
         #if not self.electrumxCheck() and self.useElectrumx:
         #    self.createElectrumxConnection()
         self._initializeWallet(force=force)
+        vault_password = config.get().get('vault password')
         self._initializeVault(
-            password=str(config.get().get('vault password')),
-            create=config.get().get('vault password') is not None,
+            password=vault_password if vault_password is not None else None,
+            create=vault_password is not None,
             force=force)
         #return self.setupSubscriptions()
 

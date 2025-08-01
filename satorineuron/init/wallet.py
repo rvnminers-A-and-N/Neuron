@@ -32,7 +32,7 @@ class WalletManager:
         """
         walletPath = walletPath or config.walletPath('wallet.yaml')
         vaultPath = vaultPath or config.walletPath('vault.yaml')
-        vaultPassword = vaultPassword or str(config.get().get('vault password'))
+        vaultPassword = vaultPassword or config.get().get('vault password')
         
         # Only create vault if we have both a password and the file doesn't exist yet
         createVault = vaultPassword is not None and not os.path.exists(vaultPath)
@@ -58,6 +58,9 @@ class WalletManager:
         self._vault: Optional[EvrmoreWallet] = None
         self._electrumx: Optional[Electrumx] = None
         self._updateConnectionStatus: Optional[Callable] = None
+        self._vaultPath: Optional[str] = None
+        self._cachePath: Optional[str] = None
+        self._peersCache: Optional[str] = None
 
     def setup(
         self,
@@ -69,9 +72,14 @@ class WalletManager:
         peersCache: Optional[str] = None,
         updateConnectionStatus: Optional[Callable] = None,
     ):
+        # Store paths for later use
+        self._vaultPath = vaultPath
+        self._cachePath = cachePath
+        self._peersCache = peersCache
+        self._updateConnectionStatus = updateConnectionStatus
+        
         self._initializeWallet(walletPath, cachePath, peersCache)
         self._initializeVault(vaultPath, cachePath, peersCache, vaultPassword, createVault)
-        self._updateConnectionStatus = updateConnectionStatus
 
     def _initializeWallet(
         self,
@@ -205,7 +213,16 @@ class WalletManager:
                 return self._vault
             self._vault.open(password)
             return self._vault
-        return self._initializeVault(password=password, create=create)
+        
+        # Use stored vault path, or default if not set
+        vaultPath = self._vaultPath or config.walletPath('vault.yaml')
+        return self._initializeVault(
+            vaultPath, 
+            self._cachePath, 
+            self._peersCache, 
+            password=password, 
+            create=create
+        )
 
     def closeVault(self) -> Union[EvrmoreWallet, None]:
         """Close the vault, reopen it without decrypting it."""
