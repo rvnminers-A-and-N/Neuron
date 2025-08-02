@@ -35,6 +35,7 @@ async def testCentrifugoSubscription(client, streamUuidSub):
     
 async def testCentrifugoPublication(client, payload, streamUuidPub):
     from satorilib.centrifugo import publish_to_stream_rest
+<<<<<<< HEAD
     import json
     from datetime import datetime, timezone
     
@@ -51,6 +52,18 @@ async def testCentrifugoPublication(client, payload, streamUuidPub):
         data=observation_data,  
         token=payload['token']
     )
+=======
+    centrifugo_data = {
+        'topic': "Json String",
+        'date': '0.10102',
+        'time': "2025-07-24 10:00:00",
+        'hash': "aklsvhukslkusfdauh",
+    }
+    publish_to_stream_rest(
+        stream_uuid=streamUuidPub, 
+        data=centrifugo_data, 
+        token=payload['token'])
+>>>>>>> 281f079 (updated tests)
 
 async def waitForLogs(client):
     ''' keep alive - simulate the engine continuing to run '''
@@ -68,7 +81,11 @@ async def testCentrifugo(test_subcription: bool = True, test_publication: bool =
     if test_subcription:
         await testCentrifugoSubscription(client, streamUuidSub='03331dab-aaed-5a61-852e-8006d66588ba') 
     if test_publication:
+<<<<<<< HEAD
         await testCentrifugoPublication(client, payload, streamUuidPub='03331dab-aaed-5a61-852e-8006d66588ba')  
+=======
+        await testCentrifugoPublication(client, payload, streamUuidPub='1de04a26-13c1-59cf-8516-a6d56476351e')
+>>>>>>> 281f079 (updated tests)
     await waitForLogs(client)
 
 
