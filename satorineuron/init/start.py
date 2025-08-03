@@ -1262,7 +1262,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     # Format data to include all fields - ensure all values are serializable
                     centrifugo_data = {
                         'value': str(data),
-                        'time': str(observationTime),
+                        'time': observationTime,
                         'hash': str(observationHash)
                     }
                     response = publish_to_stream_rest(

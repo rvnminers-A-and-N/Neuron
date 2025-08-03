@@ -166,7 +166,8 @@ class RawStreamRelayEngine(Cached):
             data=dataForServer,
             isSub=True)
 
-        lastHash = await start.dataClient.getHash(uuid)
+        hashResponse = await start.dataClient.getHash(uuid)
+        lastHash = hashResponse.data
         
         start.publish(
             topic=stream.streamId.jsonId,

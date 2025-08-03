@@ -35,15 +35,14 @@ async def testCentrifugoSubscription(client, streamUuidSub):
     
 async def testCentrifugoPublication(client, payload, streamUuidPub):
     from satorilib.centrifugo import publish_to_stream_rest
-<<<<<<< HEAD
     import json
     from datetime import datetime, timezone
     
     # Create proper data structure that matches what neurons actually send
     observation_data = {
-        "value": "0.6969",  # The actual data value
+        "value": "0.123123",  # The actual data value
         "time": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),  # ISO format timestamp
-        "hash": "test_hash_123"
+        "hash": "test_hash_124"
     }
     
     # Send as dict (Centrifugo expects dict, not JSON string)
@@ -52,18 +51,6 @@ async def testCentrifugoPublication(client, payload, streamUuidPub):
         data=observation_data,  
         token=payload['token']
     )
-=======
-    centrifugo_data = {
-        'topic': "Json String",
-        'date': '0.10102',
-        'time': "2025-07-24 10:00:00",
-        'hash': "aklsvhukslkusfdauh",
-    }
-    publish_to_stream_rest(
-        stream_uuid=streamUuidPub, 
-        data=centrifugo_data, 
-        token=payload['token'])
->>>>>>> 281f079 (updated tests)
 
 async def waitForLogs(client):
     ''' keep alive - simulate the engine continuing to run '''
@@ -81,11 +68,8 @@ async def testCentrifugo(test_subcription: bool = True, test_publication: bool =
     if test_subcription:
         await testCentrifugoSubscription(client, streamUuidSub='03331dab-aaed-5a61-852e-8006d66588ba') 
     if test_publication:
-<<<<<<< HEAD
-        await testCentrifugoPublication(client, payload, streamUuidPub='03331dab-aaed-5a61-852e-8006d66588ba')  
-=======
-        await testCentrifugoPublication(client, payload, streamUuidPub='1de04a26-13c1-59cf-8516-a6d56476351e')
->>>>>>> 281f079 (updated tests)
+        print("f85266a9")
+        await testCentrifugoPublication(client, payload, streamUuidPub='883f30d2-854c-5dcf-aa0f-1a0e9ad21df7')
     await waitForLogs(client)
 
 
