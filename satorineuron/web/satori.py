@@ -431,6 +431,19 @@ def lockRelock():
     session['authenticated'] = False
     return redirect(url_for('dashboard'))
 
+
+@app.route('/generate/otp', methods=['POST'])
+@authRequired
+def generateOtp():
+    ''' generate a one-time password '''
+    print(request.json)
+    input = request.json.get('input')
+    print(input)
+    #otp = start.wallet.generateOtp(input)
+    otp = "123456"
+    return jsonify({'otp': otp})
+
+
 ###############################################################################
 ## Errors #####################################################################
 ###############################################################################
