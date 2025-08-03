@@ -1238,7 +1238,7 @@ def removePredictionStream():
         return 'Prediction stream not found', 404
 
     # Call server.removeStream with the prediction stream details
-    r = start.server.removeOracleStream(payload=json.dumps({
+    r = start.server.removeStream(payload=json.dumps({
         'source': pubStreamId.source,
         #'pubkey': start.wallet.pubkey, #ignored by server
         'stream': pubStreamId.stream,

@@ -1259,11 +1259,11 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
             try:
                 streamId = StreamId.fromTopic(topic)
                 if streamId.uuid:
-                    # Format data to include all fields
+                    # Format data to include all fields - ensure all values are serializable
                     centrifugo_data = {
-                        'value': data,
-                        'time': observationTime,
-                        'hash': observationHash
+                        'value': str(data),
+                        'time': str(observationTime),
+                        'hash': str(observationHash)
                     }
                     response = publish_to_stream_rest(
                         stream_uuid=streamId.uuid,
