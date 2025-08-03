@@ -144,23 +144,27 @@ class RawStreamRelayEngine(Cached):
         dataForServer = pd.DataFrame(
             {'value': [data]},
             index=[timestamp])
-        try:
-            if not hasattr(self, 'activateRawStream'):
-                await start.dataClient.addActiveStream(uuid=uuid) 
-                self.activateRawStream = True
-            if start.transferProtocol == 'p2p-proactive-pubsub':
-                await start.dataClient.insertStreamData(
-                    uuid=uuid,
-                    data=dataForServer,
-                    isSub=True,
-                    sendOnly=True)
-            else:
-                await start.dataClient.insertStreamData(
-                    uuid=uuid,
-                    data=dataForServer,
-                    isSub=True)
-        except Exception as e:
-            logging.error('Unable to set data: ', e)
+        # try:
+        #     if not hasattr(self, 'activateRawStream'):
+        #         await start.dataClient.addActiveStream(uuid=uuid) 
+        #         self.activateRawStream = True
+        #     if start.transferProtocol == 'p2p-proactive-pubsub':
+        #         await start.dataClient.insertStreamData(
+        #             uuid=uuid,
+        #             data=dataForServer,
+        #             isSub=True,
+        #             sendOnly=True)
+        #     else:
+                # await start.dataClient.insertStreamData(
+                #     uuid=uuid,
+                #     data=dataForServer,
+                #     isSub=True)
+        # except Exception as e:
+        #     logging.error('Unable to set data: ', e)
+        await start.dataClient.insertStreamData(
+            uuid=uuid,
+            data=dataForServer,
+            isSub=True)
 
         lastHash = await start.dataClient.getHash(uuid)
         
