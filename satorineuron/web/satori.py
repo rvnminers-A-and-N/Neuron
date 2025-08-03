@@ -436,11 +436,9 @@ def lockRelock():
 @authRequired
 def generateOtp():
     ''' generate a one-time password '''
-    print(request.json)
-    input = request.json.get('input')
-    print(input)
-    #otp = start.wallet.generateOtp(input)
-    otp = "123456"
+    msg = request.json.get('input')
+    print('msg', msg)
+    otp = start.wallet.generateOtp(msg)
     return jsonify({'otp': otp})
 
 
