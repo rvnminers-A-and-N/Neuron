@@ -175,3 +175,9 @@ config/manifest.yaml
 config/*bk.yaml
 
 !.devcontainer.json
+
+# Docker optimization files
+Dockerfile.optimized
+build-fast.sh
+docker-compose.build.yml
+.dockerignore
