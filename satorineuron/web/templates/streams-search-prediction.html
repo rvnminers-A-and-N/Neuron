@@ -1930,11 +1930,8 @@
     .then(async (response) => {
       if (response.ok) {
         const data = await response.json();
-        console.log('Raw response data:', data);
         let parsedObservationsAndMostRecent = JSON.parse(data.observations);
-        console.log('Parsed observations and most recent:', parsedObservationsAndMostRecent);
         let parsedObservations = parsedObservationsAndMostRecent[0];
-        console.log('Individual observation sample:', parsedObservations.length > 0 ? parsedObservations[0] : 'No observations');
         let futureForecastingObservationAvgValue = parsedObservationsAndMostRecent[1];
         observationsBody.innerHTML = '';
         
