@@ -176,11 +176,8 @@ config/*bk.yaml
 
 !.devcontainer.json
 
-
-
-#docker
-
-.dockerignore
+# Docker optimization files
+Dockerfile.optimized
 build-fast.sh
 docker-compose.build.yml
-Dockerfile.optimized
+.dockerignore
