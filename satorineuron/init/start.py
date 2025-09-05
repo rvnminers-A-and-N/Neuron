@@ -926,9 +926,9 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     seen = set()
                     data[key] = [x for x in data[key] if not (x in seen or seen.add(x))]
 
-            logging.debug("My Subscribers", mySubscribers, print=True)
-            logging.debug("hostInfo", hostInfo, print=True)
-            logging.debug("remotePublishers", remotePublishers, print=True)
+            # logging.debug("My Subscribers", mySubscribers, print=True)
+            # logging.debug("hostInfo", hostInfo, print=True)
+            # logging.debug("remotePublishers", remotePublishers, print=True)
 
             hostIpAndPort = next((value for value in hostInfo.values() if value), [])
 
@@ -1249,7 +1249,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
         data: str,
         observationTime: str,
         observationHash: str,
-        toCentral: bool = True,
+        toCentral: bool = False,
         isPrediction: bool = False,
     ) -> True:
         """publishes to all the pubsub servers"""
@@ -1272,7 +1272,11 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                     )
                     if response.status_code != 200:
                         logging.warning(f"Centrifugo publish failed: {response.status_code}")
+                        raise Exception
+                    else:
+                        logging.info(f"Centrifugo publish successful: {response.status_code}")
             except Exception as e:
+                toCentral = True
                 logging.error(f"Error publishing to Centrifugo: {e}")
 
         # publishing to centrifugo WEBSOCKET (todo: move websocket connection to Engine, and use rest api for publishing here.)

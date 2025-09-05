@@ -171,7 +171,6 @@ class RawStreamRelayEngine(Cached):
             data=data,
             observationTime=timestamp,
             observationHash=lastHash,
-            toCentral=True,
             isPrediction=False)
 
     def run_async_in_thread(self, coroutine):
