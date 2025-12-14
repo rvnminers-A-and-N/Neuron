@@ -65,6 +65,10 @@ click==8.1.3 #8.1.2
 # needed for signing messages for connection with Satori server
 Crypto==1.4.1
 
+# P2P networking support (optional - enables hybrid/p2p modes)
+# Set 'networking mode: hybrid' or 'networking mode: p2p' in config.yaml to enable
+satorip2p>=1.0.0
+
 
 # needed for Synergy connection
 #python-socketio[client]==5.11.2

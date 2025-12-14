@@ -4,8 +4,28 @@ import copy
 from satorilib import logging
 from satorilib.utils import memory
 from satorilib.concepts import Observation, Stream
-from satorilib.pubsub import SatoriPubSubConn
 from satoriengine.concepts.structs import HyperParameter
+
+# P2P Integration: Config-based networking mode selection
+def _get_pubsub_conn_class():
+    """Get the appropriate SatoriPubSubConn class based on networking mode."""
+    try:
+        from satorineuron import config as neuron_config
+        networking_mode = neuron_config.get().get('networking mode', 'central')
+    except Exception:
+        networking_mode = 'central'
+
+    if networking_mode in ('hybrid', 'p2p', 'p2p_only'):
+        try:
+            from satorip2p.integration import P2PSatoriPubSubConn
+            return P2PSatoriPubSubConn
+        except ImportError:
+            pass  # Fall back to central
+
+    from satorilib.pubsub import SatoriPubSubConn
+    return SatoriPubSubConn
+
+SatoriPubSubConn = _get_pubsub_conn_class()
 from satoriengine.model import metrics
 from satoriengine.managers.data import DataManager
 from satoriengine.managers.model import ModelManager

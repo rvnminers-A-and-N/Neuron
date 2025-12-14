@@ -17,8 +17,29 @@ from satorilib import disk
 from satorilib.concepts import constants
 from satorilib.wallet import EvrmoreWallet
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
-from satorilib.server import SatoriServerClient
 from satorilib.server.api import CheckinDetails
+
+# P2P Integration: Config-based networking mode selection
+# Supports: 'central' (default/legacy), 'hybrid' (P2P with fallback), 'p2p' (pure P2P)
+def _get_server_client_class():
+    """Get the appropriate SatoriServerClient class based on networking mode."""
+    try:
+        from satorineuron import config as neuron_config
+        networking_mode = neuron_config.get().get('networking mode', 'central')
+    except Exception:
+        networking_mode = 'central'
+
+    if networking_mode in ('hybrid', 'p2p', 'p2p_only'):
+        try:
+            from satorip2p.integration import P2PSatoriServerClient
+            return P2PSatoriServerClient
+        except ImportError:
+            pass  # Fall back to central
+
+    from satorilib.server import SatoriServerClient
+    return SatoriServerClient
+
+SatoriServerClient = _get_server_client_class()
 from satorilib.centrifugo import publish_to_stream_rest
 from satorilib.asynchronous import AsyncThread
 # import satoriengine

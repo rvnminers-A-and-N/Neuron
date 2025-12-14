@@ -11,3 +11,10 @@ vault password: password
 invited by: EMxw897Kowx2i8c5YALE6jVh5JEpswapYj
 server port: 24600
 ui port: 24601
+
+# P2P Networking Mode
+# Options: central (default), hybrid (P2P with central fallback), p2p (pure P2P)
+# - central: Legacy mode, all communication through central servers (default)
+# - hybrid: P2P with central fallback - recommended for migration
+# - p2p: Pure P2P mode - fully decentralized, no central server dependency
+networking mode: central
