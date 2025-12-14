@@ -43,7 +43,7 @@ A recommender system must be instantiated for node-to-node communication.
 
 #### Connection with the Satori Network
 
-Integrate the Streamr network or other open pubsub solutions.
+~~Integrate the Streamr network or other open pubsub solutions.~~ **Done!** See [P2P Networking](#p2p-networking) section below.
 
 The underlying DLT (blockchain) has not been designed.
 
@@ -196,3 +196,50 @@ python satori.py
 ```bash
 http://localhost:24601/
 ```
+
+## P2P Networking
+
+Satori Neuron now supports decentralized peer-to-peer networking via the `satorip2p` module. This enables direct communication between neurons without relying on central servers.
+
+### Networking Modes
+
+Configure in `~/.satori/config/config.yaml`:
+
+```yaml
+# P2P Networking Mode
+# Options: central (default), hybrid, p2p
+networking mode: central
+```
+
+| Mode | Description |
+|------|-------------|
+| `central` | Legacy mode - all traffic through central servers (default) |
+| `hybrid` | P2P with central fallback - recommended for migration |
+| `p2p` | Pure P2P - fully decentralized, no central server dependency |
+
+### Features
+
+- **Peer Discovery**: Kademlia DHT for finding peers across the network
+- **Pub/Sub Messaging**: GossipSub protocol for topic-based communication
+- **NAT Traversal**: AutoNAT, Circuit Relay, hole punching, and UPnP
+- **Offline Messages**: Store-and-forward for peers temporarily offline
+- **Docker Compatible**: Works in bridge mode without `--network host`
+
+### Enabling P2P Mode
+
+1. Install satorip2p (included in requirements.txt):
+```bash
+pip install satorip2p
+```
+
+2. Edit your config:
+```yaml
+# ~/.satori/config/config.yaml
+networking mode: hybrid  # Start with hybrid for safety
+```
+
+3. Restart Neuron - it will automatically use P2P with central fallback.
+
+### More Information
+
+See the [satorip2p repository](https://github.com/SatoriNetwork/satorip2p) for full documentation.
