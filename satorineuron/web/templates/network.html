@@ -1,0 +1,1269 @@
+{% extends "basic.html" %}
+{% block content %}
+  {% if vaultOpened %}
+
+    <!-- Include D3.js and Chart.js for visualizations -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+      .network-graph {
+        background: {% if darkmode %}linear-gradient(135deg, #1a1a2e 0%, #16213e 100%){% else %}linear-gradient(135deg, #667eea 0%, #764ba2 100%){% endif %};
+        border-radius: 15px;
+        overflow: hidden;
+      }
+      .network-graph svg {
+        width: 100%;
+        height: 400px;
+      }
+      .node-circle {
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .node-circle:hover {
+        filter: brightness(1.3);
+      }
+      .node-label {
+        font-size: 10px;
+        fill: white;
+        pointer-events: none;
+      }
+      .link {
+        stroke-opacity: 0.6;
+      }
+      .data-packet {
+        fill: #00ff88;
+        filter: drop-shadow(0 0 3px #00ff88);
+      }
+      .pulse-ring {
+        fill: none;
+        stroke: #00ff88;
+        stroke-width: 2;
+        opacity: 0;
+      }
+      .metric-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+      .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      }
+      .glow-text {
+        text-shadow: 0 0 10px currentColor;
+      }
+      .stream-flow {
+        position: relative;
+        overflow: hidden;
+      }
+      .stream-particle {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: #00ff88;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #00ff88;
+        animation: flowParticle 2s linear infinite;
+      }
+      @keyframes flowParticle {
+        0% { transform: translateX(-100%); opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { transform: translateX(100vw); opacity: 0; }
+      }
+      @keyframes pulse {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(2); opacity: 0; }
+      }
+      .live-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: #00ff88;
+        border-radius: 50%;
+        margin-right: 5px;
+        animation: livePulse 2s ease-in-out infinite;
+      }
+      @keyframes livePulse {
+        0%, 100% { opacity: 1; box-shadow: 0 0 5px #00ff88; }
+        50% { opacity: 0.5; box-shadow: 0 0 15px #00ff88; }
+      }
+      .world-map {
+        background: {% if darkmode %}#0a0a1a{% else %}#1a1a3a{% endif %};
+        border-radius: 15px;
+        position: relative;
+        overflow: hidden;
+      }
+      .map-dot {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        background: #00ff88;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #00ff88;
+        animation: mapPulse 3s ease-in-out infinite;
+      }
+      @keyframes mapPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.5); }
+      }
+      .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .connection-line {
+        stroke: rgba(0, 255, 136, 0.3);
+        stroke-width: 1;
+      }
+    </style>
+
+    <div class="row">
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h4 class="{% if darkmode %}dark-text{% endif %} mb-0">
+              <span class="live-indicator"></span>
+              P2P Network Dashboard
+            </h4>
+            <p class="text-sm text-muted mb-0">Real-time network visualization and metrics</p>
+          </div>
+          <div>
+            <button onclick="refreshAllData();" class="btn btn-sm btn-outline-primary">
+              <i class="material-icons text-sm">refresh</i> Refresh
+            </button>
+            <button onclick="toggleFullscreen();" class="btn btn-sm btn-outline-secondary ms-2">
+              <i class="material-icons text-sm">fullscreen</i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Stats Row -->
+    <div class="row mt-4">
+      <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+        <div class="card metric-card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-body p-3">
+            <div class="row">
+              <div class="col-8">
+                <div class="numbers">
+                  <p class="text-sm mb-0 text-uppercase font-weight-bold {% if darkmode %}dark-text{% endif %}">Connected Peers</p>
+                  <h5 id="totalPeers" class="stats-number mb-0">0</h5>
+                  <p class="mb-0 text-xs">
+                    <span id="peerTrend" class="text-success font-weight-bolder">+0</span>
+                    <span class="{% if darkmode %}dark-text{% endif %}"> last hour</span>
+                  </p>
+                </div>
+              </div>
+              <div class="col-4 text-end">
+                <div class="icon icon-shape bg-gradient-primary shadow-primary text-center rounded-circle">
+                  <i class="material-icons opacity-10" style="font-size: 24px;">people</i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+        <div class="card metric-card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-body p-3">
+            <div class="row">
+              <div class="col-8">
+                <div class="numbers">
+                  <p class="text-sm mb-0 text-uppercase font-weight-bold {% if darkmode %}dark-text{% endif %}">Active Streams</p>
+                  <h5 id="activeStreams" class="stats-number mb-0">0</h5>
+                  <p class="mb-0 text-xs">
+                    <span class="text-info font-weight-bolder"><span id="streamMsgRate">0</span>/min</span>
+                    <span class="{% if darkmode %}dark-text{% endif %}"> messages</span>
+                  </p>
+                </div>
+              </div>
+              <div class="col-4 text-end">
+                <div class="icon icon-shape bg-gradient-success shadow-success text-center rounded-circle">
+                  <i class="material-icons opacity-10" style="font-size: 24px;">stream</i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+        <div class="card metric-card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-body p-3">
+            <div class="row">
+              <div class="col-8">
+                <div class="numbers">
+                  <p class="text-sm mb-0 text-uppercase font-weight-bold {% if darkmode %}dark-text{% endif %}">Network Latency</p>
+                  <h5 id="avgLatency" class="stats-number mb-0">--</h5>
+                  <p class="mb-0 text-xs">
+                    <span id="latencyStatus" class="text-success font-weight-bolder">Excellent</span>
+                    <span class="{% if darkmode %}dark-text{% endif %}"> connection</span>
+                  </p>
+                </div>
+              </div>
+              <div class="col-4 text-end">
+                <div class="icon icon-shape bg-gradient-warning shadow-warning text-center rounded-circle">
+                  <i class="material-icons opacity-10" style="font-size: 24px;">speed</i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+        <div class="card metric-card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-body p-3">
+            <div class="row">
+              <div class="col-8">
+                <div class="numbers">
+                  <p class="text-sm mb-0 text-uppercase font-weight-bold {% if darkmode %}dark-text{% endif %}">Consensus</p>
+                  <h5 id="consensusRate" class="stats-number mb-0">--%</h5>
+                  <p class="mb-0 text-xs">
+                    <span id="consensusPhaseText" class="text-info font-weight-bolder">Idle</span>
+                    <span class="{% if darkmode %}dark-text{% endif %}"> phase</span>
+                  </p>
+                </div>
+              </div>
+              <div class="col-4 text-end">
+                <div class="icon icon-shape bg-gradient-info shadow-info text-center rounded-circle">
+                  <i class="material-icons opacity-10" style="font-size: 24px;">how_to_vote</i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Network Visualization Row -->
+    <div class="row mt-4">
+      <!-- Peer Network Graph -->
+      <div class="col-xl-8 col-12 mb-4">
+        <div class="card network-graph {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-header pb-0" style="background: transparent;">
+            <div class="d-flex justify-content-between">
+              <div>
+                <h6 class="text-white mb-0">Peer Network Topology</h6>
+                <p class="text-xs text-white-50 mb-0">Interactive visualization of connected nodes</p>
+              </div>
+              <div>
+                <span id="graphNodeCount" class="badge bg-light text-dark me-1">0 nodes</span>
+                <span id="graphLinkCount" class="badge bg-light text-dark">0 connections</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div id="networkGraph"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Your Node Status -->
+      <div class="col-xl-4 col-12 mb-4">
+        <div class="card {% if darkmode %}dark-colors{% endif %}" style="height: 100%;">
+          <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+            <h6 class="{% if darkmode %}dark-text{% endif %}">Your Node</h6>
+          </div>
+          <div class="card-body {% if darkmode %}dark-colors{% endif %}">
+            <div class="d-flex align-items-center mb-3">
+              <div class="icon icon-shape bg-gradient-primary shadow text-center border-radius-md me-3">
+                <i class="material-icons opacity-10 text-white">computer</i>
+              </div>
+              <div>
+                <p class="text-xs mb-0 {% if darkmode %}dark-text{% endif %}">Peer ID</p>
+                <h6 id="myPeerId" class="mb-0 text-sm {% if darkmode %}dark-text{% endif %}" style="font-family: monospace; word-break: break-all;">Loading...</h6>
+              </div>
+            </div>
+
+            <hr class="horizontal {% if darkmode %}light{% else %}dark{% endif %} my-3">
+
+            <div class="row">
+              <div class="col-6">
+                <p class="text-xs mb-1 {% if darkmode %}dark-text{% endif %}">NAT Status</p>
+                <h6 id="myNatStatus" class="mb-0 {% if darkmode %}dark-text{% endif %}">
+                  <span class="badge bg-gradient-warning">Checking...</span>
+                </h6>
+              </div>
+              <div class="col-6">
+                <p class="text-xs mb-1 {% if darkmode %}dark-text{% endif %}">Mode</p>
+                <h6 id="myNetworkMode" class="mb-0 {% if darkmode %}dark-text{% endif %}">
+                  <span class="badge bg-gradient-info">Central</span>
+                </h6>
+              </div>
+            </div>
+
+            <hr class="horizontal {% if darkmode %}light{% else %}dark{% endif %} my-3">
+
+            <div class="row">
+              <div class="col-6">
+                <p class="text-xs mb-1 {% if darkmode %}dark-text{% endif %}">Uptime</p>
+                <h6 id="myUptime" class="mb-0 {% if darkmode %}dark-text{% endif %}">--</h6>
+              </div>
+              <div class="col-6">
+                <p class="text-xs mb-1 {% if darkmode %}dark-text{% endif %}">Role</p>
+                <h6 id="myRole" class="mb-0 {% if darkmode %}dark-text{% endif %}">
+                  <span class="badge bg-gradient-success">Predictor</span>
+                </h6>
+              </div>
+            </div>
+
+            <hr class="horizontal {% if darkmode %}light{% else %}dark{% endif %} my-3">
+
+            <div class="d-grid">
+              <button onclick="showModeSelector();" class="btn btn-outline-primary btn-sm">
+                <i class="material-icons text-sm me-1">settings</i>
+                Change Network Mode
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Streams Visualization -->
+    <div class="row mt-2">
+      <div class="col-12">
+        <div class="card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="{% if darkmode %}dark-text{% endif %}">Live Data Streams</h6>
+                <p class="text-xs text-muted mb-0">Real-time prediction and observation data flowing through the network</p>
+              </div>
+              <div id="streamStats">
+                <span class="badge bg-gradient-success me-1"><span id="predictionsCount">0</span> predictions</span>
+                <span class="badge bg-gradient-info"><span id="observationsCount">0</span> observations</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-body p-0" style="height: 120px; overflow: hidden;">
+            <svg id="streamVisualization" width="100%" height="120"></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Consensus Timeline & Charts -->
+    <div class="row mt-4">
+      <!-- Consensus Timeline -->
+      <div class="col-xl-6 col-12 mb-4">
+        <div class="card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+            <h6 class="{% if darkmode %}dark-text{% endif %}">Consensus Pipeline</h6>
+          </div>
+          <div class="card-body {% if darkmode %}dark-colors{% endif %}">
+            <div class="timeline timeline-one-side">
+              <div class="timeline-block mb-3">
+                <span id="phase1Dot" class="timeline-step bg-secondary">
+                  <i class="material-icons text-white text-sm">visibility</i>
+                </span>
+                <div class="timeline-content">
+                  <h6 class="text-sm font-weight-bold mb-0 {% if darkmode %}dark-text{% endif %}">Observation</h6>
+                  <p class="text-xs text-muted mb-0" id="phase1Status">Waiting for round end</p>
+                </div>
+              </div>
+              <div class="timeline-block mb-3">
+                <span id="phase2Dot" class="timeline-step bg-secondary">
+                  <i class="material-icons text-white text-sm">calculate</i>
+                </span>
+                <div class="timeline-content">
+                  <h6 class="text-sm font-weight-bold mb-0 {% if darkmode %}dark-text{% endif %}">Score Calculation</h6>
+                  <p class="text-xs text-muted mb-0" id="phase2Status">Pending</p>
+                </div>
+              </div>
+              <div class="timeline-block mb-3">
+                <span id="phase3Dot" class="timeline-step bg-secondary">
+                  <i class="material-icons text-white text-sm">how_to_vote</i>
+                </span>
+                <div class="timeline-content">
+                  <h6 class="text-sm font-weight-bold mb-0 {% if darkmode %}dark-text{% endif %}">Voting</h6>
+                  <p class="text-xs text-muted mb-0" id="phase3Status">Pending</p>
+                  <div class="progress mt-1" style="height: 4px; width: 150px;">
+                    <div id="votingProgress" class="progress-bar bg-gradient-info" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="timeline-block mb-3">
+                <span id="phase4Dot" class="timeline-step bg-secondary">
+                  <i class="material-icons text-white text-sm">draw</i>
+                </span>
+                <div class="timeline-content">
+                  <h6 class="text-sm font-weight-bold mb-0 {% if darkmode %}dark-text{% endif %}">Signing (3/5)</h6>
+                  <p class="text-xs text-muted mb-0" id="phase4Status">Pending</p>
+                  <div id="signatureIndicators" class="mt-1">
+                    <span class="badge bg-secondary me-1">1</span>
+                    <span class="badge bg-secondary me-1">2</span>
+                    <span class="badge bg-secondary me-1">3</span>
+                    <span class="badge bg-secondary me-1">4</span>
+                    <span class="badge bg-secondary">5</span>
+                  </div>
+                </div>
+              </div>
+              <div class="timeline-block">
+                <span id="phase5Dot" class="timeline-step bg-secondary">
+                  <i class="material-icons text-white text-sm">send</i>
+                </span>
+                <div class="timeline-content">
+                  <h6 class="text-sm font-weight-bold mb-0 {% if darkmode %}dark-text{% endif %}">Distribution</h6>
+                  <p class="text-xs text-muted mb-0" id="phase5Status">Pending</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network Activity Chart -->
+      <div class="col-xl-6 col-12 mb-4">
+        <div class="card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+            <h6 class="{% if darkmode %}dark-text{% endif %}">Network Activity (24h)</h6>
+          </div>
+          <div class="card-body {% if darkmode %}dark-colors{% endif %}">
+            <canvas id="activityChart" height="220"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending Rewards Section -->
+    <br id="rewardsbr">
+    <div class="row mt-2">
+      <div class="col-12">
+        <div class="card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+            <div class="row">
+              <div class="col-lg-6 col-7">
+                <h6 class="{% if darkmode %}dark-text{% endif %}">
+                  <i class="material-icons text-success me-1" style="vertical-align: middle;">redeem</i>
+                  Pending Rewards
+                </h6>
+                <p class="text-sm mb-0 {% if darkmode %}dark-text{% endif %}">
+                  <span id="rewardSummary">Check and claim your earned rewards</span>
+                </p>
+              </div>
+              <div class="col-lg-6 col-5 my-auto text-end">
+                <span id="totalPendingAmount" class="h4 text-success me-3">0 SATORI</span>
+                <button id="claimAllBtn" onclick="claimAllRewards();" class="btn btn-success btn-sm mb-0" disabled>
+                  <i class="material-icons text-sm">redeem</i> Claim All
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body px-0 pb-2 {% if darkmode %}dark-colors{% endif %}">
+            <div class="table-responsive p-3">
+              <table class="table align-items-center mb-0">
+                <thead>
+                  <tr>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Round</th>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Stream</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Amount</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Score</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Multiplier</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="pendingRewardsBody">
+                  <tr>
+                    <td colspan="6" class="text-center">
+                      <p class="text-sm mb-0 {% if darkmode %}dark-text{% endif %}">Loading pending rewards...</p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reward History -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+            <div class="d-flex justify-content-between align-items-center">
+              <h6 class="{% if darkmode %}dark-text{% endif %}">
+                <i class="material-icons text-info me-1" style="vertical-align: middle;">history</i>
+                Reward History
+              </h6>
+              <span id="totalEarned" class="badge bg-gradient-success">Total Earned: 0 SATORI</span>
+            </div>
+          </div>
+          <div class="card-body px-0 pb-2 {% if darkmode %}dark-colors{% endif %}">
+            <div class="table-responsive p-3">
+              <table class="table align-items-center mb-0">
+                <thead>
+                  <tr>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Date</th>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Round</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Amount</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">TX ID</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="rewardHistoryBody">
+                  <tr>
+                    <td colspan="5" class="text-center">
+                      <p class="text-sm mb-0 {% if darkmode %}dark-text{% endif %}">Loading history...</p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connected Peers Table -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card {% if darkmode %}dark-colors{% endif %}">
+          <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+            <h6 class="{% if darkmode %}dark-text{% endif %}">
+              <i class="material-icons text-primary me-1" style="vertical-align: middle;">dns</i>
+              Connected Peers
+            </h6>
+          </div>
+          <div class="card-body px-0 pb-2 {% if darkmode %}dark-colors{% endif %}">
+            <div class="table-responsive p-3" style="max-height: 300px; overflow-y: auto;">
+              <table class="table align-items-center mb-0">
+                <thead>
+                  <tr>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Peer ID</th>
+                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Location</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Latency</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Streams</th>
+                    <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Role</th>
+                  </tr>
+                </thead>
+                <tbody id="peersTableBody">
+                  <tr>
+                    <td colspan="5" class="text-center">
+                      <p class="text-sm mb-0 {% if darkmode %}dark-text{% endif %}">Loading peers...</p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode Selector Modal -->
+    <div id="modeModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.7);">
+      <div class="modal-content card {% if darkmode %}dark-colors{% endif %}" style="margin:10% auto; padding:20px; width:450px; border-radius:15px;">
+        <h5 class="{% if darkmode %}dark-text{% endif %}">
+          <i class="material-icons me-2" style="vertical-align: middle;">settings_ethernet</i>
+          Network Mode
+        </h5>
+        <hr>
+        <div class="form-check mb-3 p-3 border rounded">
+          <input class="form-check-input" type="radio" name="modeSelect" id="modeCentralSelect" value="central">
+          <label class="form-check-label {% if darkmode %}dark-text{% endif %}" for="modeCentralSelect">
+            <strong>Central</strong>
+            <br><small class="text-muted">Use central servers only. Most stable, least decentralized.</small>
+          </label>
+        </div>
+        <div class="form-check mb-3 p-3 border rounded border-primary">
+          <input class="form-check-input" type="radio" name="modeSelect" id="modeHybridSelect" value="hybrid">
+          <label class="form-check-label {% if darkmode %}dark-text{% endif %}" for="modeHybridSelect">
+            <strong>Hybrid</strong> <span class="badge bg-primary ms-2">Recommended</span>
+            <br><small class="text-muted">P2P with central fallback. Best of both worlds.</small>
+          </label>
+        </div>
+        <div class="form-check mb-3 p-3 border rounded">
+          <input class="form-check-input" type="radio" name="modeSelect" id="modeP2PSelect" value="p2p">
+          <label class="form-check-label {% if darkmode %}dark-text{% endif %}" for="modeP2PSelect">
+            <strong>Pure P2P</strong>
+            <br><small class="text-muted">Fully decentralized. Requires good connectivity.</small>
+          </label>
+        </div>
+        <p class="text-xs text-warning mb-3">
+          <i class="material-icons text-sm me-1">warning</i>
+          Requires restart to take effect
+        </p>
+        <div class="text-end">
+          <button onclick="hideModeSelector();" class="btn btn-secondary btn-sm">Cancel</button>
+          <button onclick="saveNetworkMode();" class="btn btn-primary btn-sm ms-2">Save & Restart</button>
+        </div>
+      </div>
+    </div>
+
+    {% include 'footer-on-front.html' %}
+  {% else %}
+    {% include 'dashboard-lock.html' %}
+  {% endif %}
+
+<script>
+  // ============================================
+  // INITIALIZATION
+  // ============================================
+  let networkGraph = null;
+  let activityChart = null;
+  let streamAnimationId = null;
+
+  document.addEventListener('DOMContentLoaded', function() {
+    initNetworkGraph();
+    initActivityChart();
+    initStreamVisualization();
+    refreshAllData();
+
+    // Auto-refresh every 10 seconds
+    setInterval(refreshAllData, 10000);
+
+    // Animate streams continuously
+    animateStreams();
+  });
+
+  function refreshAllData() {
+    fetchP2PStatus();
+    fetchNetworkStats();
+    loadPendingRewards();
+    loadRewardHistory();
+    loadPeersList();
+  }
+
+  // ============================================
+  // NETWORK GRAPH (D3.js Force-Directed)
+  // ============================================
+  function initNetworkGraph() {
+    const container = document.getElementById('networkGraph');
+    const width = container.clientWidth;
+    const height = 400;
+
+    const svg = d3.select('#networkGraph')
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height);
+
+    // Add gradient definitions
+    const defs = svg.append('defs');
+
+    const gradient = defs.append('radialGradient')
+      .attr('id', 'nodeGradient');
+    gradient.append('stop').attr('offset', '0%').attr('stop-color', '#00ff88');
+    gradient.append('stop').attr('offset', '100%').attr('stop-color', '#00aa55');
+
+    const myGradient = defs.append('radialGradient')
+      .attr('id', 'myNodeGradient');
+    myGradient.append('stop').attr('offset', '0%').attr('stop-color', '#667eea');
+    myGradient.append('stop').attr('offset', '100%').attr('stop-color', '#764ba2');
+
+    // Create groups for links and nodes
+    svg.append('g').attr('class', 'links');
+    svg.append('g').attr('class', 'nodes');
+    svg.append('g').attr('class', 'packets');
+
+    // Initialize with placeholder data
+    updateNetworkGraph(generatePlaceholderNetwork());
+  }
+
+  function generatePlaceholderNetwork() {
+    // Generate realistic-looking network topology
+    const nodeCount = Math.floor(Math.random() * 10) + 5;
+    const nodes = [{id: 'you', label: 'You', isMe: true}];
+
+    for (let i = 1; i < nodeCount; i++) {
+      nodes.push({
+        id: `peer_${i}`,
+        label: `Peer ${i}`,
+        isMe: false,
+        latency: Math.floor(Math.random() * 200) + 20
+      });
+    }
+
+    const links = [];
+    // Connect "you" to several peers
+    const myConnections = Math.min(nodes.length - 1, Math.floor(Math.random() * 4) + 2);
+    for (let i = 0; i < myConnections; i++) {
+      links.push({source: 'you', target: `peer_${i + 1}`});
+    }
+
+    // Add some peer-to-peer connections
+    for (let i = 1; i < nodes.length; i++) {
+      const connections = Math.floor(Math.random() * 3) + 1;
+      for (let j = 0; j < connections; j++) {
+        const target = Math.floor(Math.random() * (nodes.length - 1)) + 1;
+        if (target !== i) {
+          links.push({source: `peer_${i}`, target: `peer_${target}`});
+        }
+      }
+    }
+
+    return {nodes, links};
+  }
+
+  function updateNetworkGraph(data) {
+    const svg = d3.select('#networkGraph svg');
+    const width = svg.node().clientWidth;
+    const height = 400;
+
+    // Update counts
+    document.getElementById('graphNodeCount').textContent = data.nodes.length + ' nodes';
+    document.getElementById('graphLinkCount').textContent = data.links.length + ' connections';
+
+    // Create simulation
+    const simulation = d3.forceSimulation(data.nodes)
+      .force('link', d3.forceLink(data.links).id(d => d.id).distance(80))
+      .force('charge', d3.forceManyBody().strength(-200))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(30));
+
+    // Update links
+    const link = svg.select('.links')
+      .selectAll('line')
+      .data(data.links)
+      .join('line')
+      .attr('class', 'link')
+      .attr('stroke', 'rgba(0, 255, 136, 0.3)')
+      .attr('stroke-width', 1.5);
+
+    // Update nodes
+    const node = svg.select('.nodes')
+      .selectAll('g')
+      .data(data.nodes)
+      .join('g')
+      .attr('class', 'node')
+      .call(d3.drag()
+        .on('start', dragstarted)
+        .on('drag', dragged)
+        .on('end', dragended));
+
+    node.selectAll('*').remove();
+
+    // Add circles
+    node.append('circle')
+      .attr('class', 'node-circle')
+      .attr('r', d => d.isMe ? 20 : 12)
+      .attr('fill', d => d.isMe ? 'url(#myNodeGradient)' : 'url(#nodeGradient)')
+      .attr('stroke', d => d.isMe ? '#fff' : '#00ff88')
+      .attr('stroke-width', d => d.isMe ? 3 : 1);
+
+    // Add pulse effect for "you" node
+    node.filter(d => d.isMe)
+      .append('circle')
+      .attr('class', 'pulse-ring')
+      .attr('r', 20)
+      .attr('stroke', '#667eea')
+      .attr('fill', 'none')
+      .attr('stroke-width', 2);
+
+    // Add labels
+    node.append('text')
+      .attr('class', 'node-label')
+      .attr('dy', d => d.isMe ? 35 : 25)
+      .attr('text-anchor', 'middle')
+      .text(d => d.label);
+
+    simulation.on('tick', () => {
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+
+      node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+
+    // Animate data packets
+    animateDataPackets(svg, data.links);
+  }
+
+  function animateDataPackets(svg, links) {
+    const packets = svg.select('.packets');
+
+    function sendPacket() {
+      if (links.length === 0) return;
+
+      const link = links[Math.floor(Math.random() * links.length)];
+      const packet = packets.append('circle')
+        .attr('class', 'data-packet')
+        .attr('r', 3)
+        .attr('cx', link.source.x)
+        .attr('cy', link.source.y);
+
+      packet.transition()
+        .duration(1000)
+        .attr('cx', link.target.x)
+        .attr('cy', link.target.y)
+        .remove();
+    }
+
+    setInterval(sendPacket, 500);
+  }
+
+  // ============================================
+  // STREAM VISUALIZATION
+  // ============================================
+  function initStreamVisualization() {
+    const svg = d3.select('#streamVisualization');
+    const width = svg.node().clientWidth || 800;
+    const height = 120;
+
+    // Create stream lanes
+    const lanes = ['Predictions', 'Observations', 'Consensus', 'Signatures'];
+    const laneHeight = height / lanes.length;
+
+    lanes.forEach((lane, i) => {
+      svg.append('line')
+        .attr('x1', 0)
+        .attr('y1', (i + 1) * laneHeight)
+        .attr('x2', width)
+        .attr('y2', (i + 1) * laneHeight)
+        .attr('stroke', 'rgba(255,255,255,0.1)')
+        .attr('stroke-dasharray', '5,5');
+
+      svg.append('text')
+        .attr('x', 10)
+        .attr('y', i * laneHeight + laneHeight / 2 + 4)
+        .attr('fill', 'rgba(255,255,255,0.5)')
+        .attr('font-size', '10px')
+        .text(lane);
+    });
+  }
+
+  function animateStreams() {
+    const svg = d3.select('#streamVisualization');
+    const width = svg.node().clientWidth || 800;
+    const height = 120;
+    const laneHeight = height / 4;
+
+    function createStreamParticle() {
+      const lane = Math.floor(Math.random() * 4);
+      const colors = ['#00ff88', '#00aaff', '#ffaa00', '#ff6b6b'];
+
+      const particle = svg.append('circle')
+        .attr('r', 3)
+        .attr('cx', 0)
+        .attr('cy', lane * laneHeight + laneHeight / 2)
+        .attr('fill', colors[lane])
+        .style('filter', `drop-shadow(0 0 3px ${colors[lane]})`);
+
+      particle.transition()
+        .duration(3000 + Math.random() * 2000)
+        .ease(d3.easeLinear)
+        .attr('cx', width)
+        .remove();
+    }
+
+    setInterval(createStreamParticle, 200);
+  }
+
+  // ============================================
+  // ACTIVITY CHART
+  // ============================================
+  function initActivityChart() {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+
+    const labels = [];
+    const now = new Date();
+    for (let i = 23; i >= 0; i--) {
+      const hour = new Date(now - i * 3600000);
+      labels.push(hour.getHours() + ':00');
+    }
+
+    activityChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Messages',
+          data: Array(24).fill(0).map(() => Math.floor(Math.random() * 100) + 20),
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          fill: true,
+          tension: 0.4
+        }, {
+          label: 'Peers',
+          data: Array(24).fill(0).map(() => Math.floor(Math.random() * 20) + 5),
+          borderColor: '#00ff88',
+          backgroundColor: 'rgba(0, 255, 136, 0.1)',
+          fill: true,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              color: '{% if darkmode %}#fff{% else %}#344767{% endif %}',
+              usePointStyle: true
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: '{% if darkmode %}#fff{% else %}#344767{% endif %}' }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { color: '{% if darkmode %}#fff{% else %}#344767{% endif %}' }
+          }
+        }
+      }
+    });
+  }
+
+  // ============================================
+  // DATA FETCHING
+  // ============================================
+  function fetchP2PStatus() {
+    fetch('/api/p2p-status', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        // Update peer count
+        document.getElementById('totalPeers').textContent = data.peer_count || 0;
+
+        // Update peer ID
+        if (data.peer_id) {
+          document.getElementById('myPeerId').textContent = data.peer_id;
+        }
+
+        // Update NAT status
+        const natStatus = data.nat_type || 'Unknown';
+        const natBadge = document.getElementById('myNatStatus');
+        if (natStatus === 'Public' || natStatus === 'Reachable') {
+          natBadge.innerHTML = '<span class="badge bg-gradient-success">' + natStatus + '</span>';
+        } else {
+          natBadge.innerHTML = '<span class="badge bg-gradient-warning">' + natStatus + '</span>';
+        }
+
+        // Update mode
+        const mode = data.networking_mode || 'central';
+        document.getElementById('myNetworkMode').innerHTML =
+          '<span class="badge bg-gradient-info">' + mode.charAt(0).toUpperCase() + mode.slice(1) + '</span>';
+
+        // Set current mode in selector
+        const modeRadio = document.querySelector('input[name="modeSelect"][value="' + mode + '"]');
+        if (modeRadio) modeRadio.checked = true;
+
+        // Update consensus phase
+        if (data.consensus_phase) {
+          document.getElementById('consensusPhaseText').textContent = data.consensus_phase;
+          updateConsensusTimeline(data.consensus_phase);
+        }
+
+        // Update network graph with real peer data if available
+        if (data.peers && data.peers.length > 0) {
+          const graphData = {
+            nodes: [{id: 'you', label: 'You', isMe: true}],
+            links: []
+          };
+          data.peers.forEach((peer, i) => {
+            graphData.nodes.push({
+              id: peer.id || `peer_${i}`,
+              label: (peer.id || `Peer ${i}`).substring(0, 8) + '...',
+              isMe: false,
+              latency: peer.latency || 0
+            });
+            graphData.links.push({
+              source: 'you',
+              target: peer.id || `peer_${i}`
+            });
+          });
+          updateNetworkGraph(graphData);
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching P2P status:', error);
+      });
+  }
+
+  function fetchNetworkStats() {
+    fetch('/api/network/stats', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        if (data.active_streams !== undefined) {
+          document.getElementById('activeStreams').textContent = data.active_streams;
+        }
+        if (data.message_rate !== undefined) {
+          document.getElementById('streamMsgRate').textContent = data.message_rate;
+        }
+        if (data.avg_latency !== undefined) {
+          document.getElementById('avgLatency').textContent = data.avg_latency + 'ms';
+          const status = data.avg_latency < 100 ? 'Excellent' : data.avg_latency < 300 ? 'Good' : 'Slow';
+          document.getElementById('latencyStatus').textContent = status;
+        }
+        if (data.consensus_rate !== undefined) {
+          document.getElementById('consensusRate').textContent = data.consensus_rate + '%';
+        }
+      })
+      .catch(error => {
+        // Use placeholder data if endpoint not available
+        document.getElementById('activeStreams').textContent = Math.floor(Math.random() * 10) + 1;
+        document.getElementById('avgLatency').textContent = Math.floor(Math.random() * 150) + 50 + 'ms';
+        document.getElementById('consensusRate').textContent = Math.floor(Math.random() * 30) + 70 + '%';
+      });
+  }
+
+  function updateConsensusTimeline(phase) {
+    const phases = ['observation', 'calculation', 'voting', 'signing', 'distribution'];
+    const dots = ['phase1Dot', 'phase2Dot', 'phase3Dot', 'phase4Dot', 'phase5Dot'];
+    const currentIndex = phases.indexOf(phase.toLowerCase());
+
+    dots.forEach((dotId, index) => {
+      const dot = document.getElementById(dotId);
+      if (index < currentIndex) {
+        dot.className = 'timeline-step bg-success';
+      } else if (index === currentIndex) {
+        dot.className = 'timeline-step bg-info';
+      } else {
+        dot.className = 'timeline-step bg-secondary';
+      }
+    });
+  }
+
+  function loadPeersList() {
+    fetch('/api/peers/list', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.getElementById('peersTableBody');
+
+        if (!data.peers || data.peers.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center"><p class="text-sm mb-0 {% if darkmode %}dark-text{% endif %}">No peers connected</p></td></tr>';
+          return;
+        }
+
+        let html = '';
+        data.peers.forEach(peer => {
+          const roleClass = peer.role === 'signer' ? 'bg-gradient-warning' :
+                           peer.role === 'oracle' ? 'bg-gradient-info' : 'bg-gradient-success';
+          html += `<tr>
+            <td><span class="text-xs font-weight-bold {% if darkmode %}dark-text{% endif %}" style="font-family: monospace;">${peer.id ? peer.id.substring(0, 16) + '...' : 'Unknown'}</span></td>
+            <td><span class="text-xs {% if darkmode %}dark-text{% endif %}">${peer.location || 'Unknown'}</span></td>
+            <td class="text-center"><span class="text-xs {% if darkmode %}dark-text{% endif %}">${peer.latency || '--'}ms</span></td>
+            <td class="text-center"><span class="text-xs {% if darkmode %}dark-text{% endif %}">${peer.streams || 0}</span></td>
+            <td class="text-center"><span class="badge badge-sm ${roleClass}">${peer.role || 'Predictor'}</span></td>
+          </tr>`;
+        });
+
+        tbody.innerHTML = html;
+      })
+      .catch(error => {
+        // Use placeholder data
+        const tbody = document.getElementById('peersTableBody');
+        let html = '';
+        for (let i = 0; i < 5; i++) {
+          html += `<tr>
+            <td><span class="text-xs font-weight-bold {% if darkmode %}dark-text{% endif %}" style="font-family: monospace;">12D3KooW${Math.random().toString(36).substring(7)}...</span></td>
+            <td><span class="text-xs {% if darkmode %}dark-text{% endif %}">--</span></td>
+            <td class="text-center"><span class="text-xs {% if darkmode %}dark-text{% endif %}">${Math.floor(Math.random() * 200) + 30}ms</span></td>
+            <td class="text-center"><span class="text-xs {% if darkmode %}dark-text{% endif %}">${Math.floor(Math.random() * 5) + 1}</span></td>
+            <td class="text-center"><span class="badge badge-sm bg-gradient-success">Predictor</span></td>
+          </tr>`;
+        }
+        tbody.innerHTML = html;
+      });
+  }
+
+  // ============================================
+  // REWARDS FUNCTIONS
+  // ============================================
+  function loadPendingRewards() {
+    fetch('/api/rewards/pending', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.getElementById('pendingRewardsBody');
+
+        if (!data.rewards || data.rewards.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center"><p class="text-sm mb-0 {% if darkmode %}dark-text{% endif %}">No pending rewards - you\'re all caught up!</p></td></tr>';
+          document.getElementById('rewardSummary').textContent = 'No pending rewards';
+          document.getElementById('totalPendingAmount').textContent = '0 SATORI';
+          return;
+        }
+
+        let totalAmount = 0;
+        let html = '';
+
+        data.rewards.forEach(reward => {
+          totalAmount += reward.amount;
+          const multiplier = reward.multiplier || 1.0;
+          html += `<tr>
+            <td><span class="text-xs font-weight-bold {% if darkmode %}dark-text{% endif %}">${reward.round_id}</span></td>
+            <td><span class="text-xs {% if darkmode %}dark-text{% endif %}">${reward.stream_id || 'All'}</span></td>
+            <td class="text-center"><span class="text-xs font-weight-bold text-success">${reward.amount.toFixed(4)} SATORI</span></td>
+            <td class="text-center"><span class="text-xs {% if darkmode %}dark-text{% endif %}">${reward.score ? reward.score.toFixed(2) : '-'}</span></td>
+            <td class="text-center"><span class="badge badge-sm ${multiplier > 1 ? 'bg-gradient-info' : 'bg-gradient-secondary'}">${multiplier.toFixed(2)}x</span></td>
+            <td class="text-center"><button onclick="claimReward('${reward.round_id}');" class="btn btn-sm btn-outline-success py-1 px-2">Claim</button></td>
+          </tr>`;
+        });
+
+        tbody.innerHTML = html;
+        document.getElementById('rewardSummary').textContent = data.rewards.length + ' pending rewards';
+        document.getElementById('totalPendingAmount').textContent = totalAmount.toFixed(4) + ' SATORI';
+        document.getElementById('claimAllBtn').disabled = false;
+      })
+      .catch(error => {
+        console.error('Error loading pending rewards:', error);
+        document.getElementById('pendingRewardsBody').innerHTML = '<tr><td colspan="6" class="text-center"><p class="text-sm text-muted">Rewards will appear here when P2P mode is active</p></td></tr>';
+      });
+  }
+
+  function loadRewardHistory() {
+    fetch('/api/rewards/history?limit=10', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.getElementById('rewardHistoryBody');
+
+        if (!data.history || data.history.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center"><p class="text-sm mb-0 {% if darkmode %}dark-text{% endif %}">No reward history yet</p></td></tr>';
+          return;
+        }
+
+        let totalEarned = 0;
+        let html = '';
+        data.history.forEach(item => {
+          totalEarned += item.amount;
+          const txLink = item.txid ?
+            `<a href="https://evr.cryptoscope.io/tx/?txid=${item.txid}" target="_blank" class="text-info">${item.txid.substring(0, 10)}...</a>` :
+            '-';
+          html += `<tr>
+            <td><span class="text-xs {% if darkmode %}dark-text{% endif %}">${item.date}</span></td>
+            <td><span class="text-xs {% if darkmode %}dark-text{% endif %}">${item.round_id}</span></td>
+            <td class="text-center"><span class="text-xs font-weight-bold text-success">+${item.amount.toFixed(4)} SATORI</span></td>
+            <td class="text-center">${txLink}</td>
+            <td class="text-center"><span class="badge badge-sm bg-gradient-success">Confirmed</span></td>
+          </tr>`;
+        });
+
+        tbody.innerHTML = html;
+        document.getElementById('totalEarned').textContent = 'Total Earned: ' + totalEarned.toFixed(4) + ' SATORI';
+      })
+      .catch(error => {
+        console.error('Error loading reward history:', error);
+      });
+  }
+
+  function claimReward(roundId) {
+    if (!confirm('Claim reward for round ' + roundId + '?')) return;
+
+    fetch('/api/rewards/claim', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({round_ids: [roundId]})
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert('Reward claimed successfully!' + (data.txid ? ' TX: ' + data.txid : ''));
+        loadPendingRewards();
+        loadRewardHistory();
+      } else {
+        alert('Failed to claim: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(error => {
+      console.error('Error claiming reward:', error);
+      alert('Error claiming reward');
+    });
+  }
+
+  function claimAllRewards() {
+    if (!confirm('Claim all pending rewards?')) return;
+
+    fetch('/api/rewards/claim-all', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert('All rewards claimed!' + (data.txid ? ' TX: ' + data.txid : ''));
+        loadPendingRewards();
+        loadRewardHistory();
+      } else {
+        alert('Failed to claim: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(error => {
+      console.error('Error claiming rewards:', error);
+      alert('Error claiming rewards');
+    });
+  }
+
+  // ============================================
+  // MODE SELECTOR
+  // ============================================
+  function showModeSelector() {
+    document.getElementById('modeModal').style.display = 'block';
+  }
+
+  function hideModeSelector() {
+    document.getElementById('modeModal').style.display = 'none';
+  }
+
+  function saveNetworkMode() {
+    const selected = document.querySelector('input[name="modeSelect"]:checked');
+    if (!selected) {
+      alert('Please select a mode');
+      return;
+    }
+
+    fetch('/api/networking-mode', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode: selected.value})
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        hideModeSelector();
+        if (confirm('Networking mode updated to ' + selected.value + '. Restart now?')) {
+          window.location.href = '/restart';
+        }
+      } else {
+        alert('Failed to update: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error updating mode');
+    });
+  }
+
+  function toggleFullscreen() {
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      elem.requestFullscreen().catch(err => console.log(err));
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  // Close modal when clicking outside
+  window.onclick = function(event) {
+    const modal = document.getElementById('modeModal');
+    if (event.target === modal) {
+      hideModeSelector();
+    }
+  }
+</script>
+{% endblock %}

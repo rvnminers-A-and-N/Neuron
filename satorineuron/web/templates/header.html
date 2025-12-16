@@ -53,9 +53,12 @@
             <i id="connectionPubsub" class="material-icons {% if darkmode %}dark-text{% endif %}" style="color: #548c2f; vertical-align:text-bottom;">circle</i>
           </a>
          
-          <!--<a href="{{ url_for('modeLight') }}" title="P2P connection" class="text-xs p-0" style="font-size: xx-small; -webkit-writing-mode: vertical-lr; padding-bottom: 1px;">
-            <i id="connectionP2p" class="fa fa-circle" style="color: maroon;"></i>
-          </a>-->
+          <a href="#" title="P2P connection" class="text-xs p-0" style="font-size: xx-small; -webkit-writing-mode: vertical-lr; padding-bottom: 1px;" onClick="refreshConnectionsStatus('connectionP2p')">
+            <i id="connectionP2p" class="material-icons {% if darkmode %}dark-text{% endif %}" style="color: maroon; vertical-align:text-bottom;">circle</i>
+          </a>
+          <span id="peerCount" title="Connected P2P peers" class="text-xs p-0 {% if darkmode %}dark-text{% endif %}" style="font-size: x-small; margin-left: 4px; color: #666;">0</span>
+          <span id="natStatus" title="NAT traversal status" class="text-xs p-0 {% if darkmode %}dark-text{% endif %}" style="font-size: xx-small; margin-left: 4px; color: #f0ad4e;"></span>
+          <span id="consensusPhase" title="Consensus phase" class="text-xs p-0 {% if darkmode %}dark-text{% endif %}" style="font-size: xx-small; margin-left: 6px; padding: 1px 4px; border-radius: 3px; background-color: #6c757d; color: white;"></span>
         </li>
         <!-- Balance -->
         
@@ -426,11 +429,46 @@
       } else {
         document.getElementById("connectionPubsub").style.color = 'maroon';
       }
-      //if (conns.p2p) {
-      //  document.getElementById("connectionP2p").style.color = '#548c2f';
-      //} else {
-      //  document.getElementById("connectionP2p").style.color = 'maroon';
-      //}
+      if (conns.p2p) {
+        document.getElementById("connectionP2p").style.color = '#548c2f';
+      } else {
+        document.getElementById("connectionP2p").style.color = 'maroon';
+      }
+      // Update peer count if available
+      if (conns.peer_count !== undefined) {
+        document.getElementById("peerCount").textContent = conns.peer_count;
+        document.getElementById("peerCount").title = "Connected P2P peers: " + conns.peer_count;
+      }
+      // Update NAT status if available
+      if (conns.nat_type !== undefined) {
+        var natElement = document.getElementById("natStatus");
+        if (natElement) {
+          natElement.textContent = conns.nat_type;
+          natElement.style.color = (conns.nat_type === 'Public' || conns.nat_type === 'Reachable') ? '#548c2f' : '#f0ad4e';
+        }
+      }
+      // Update consensus phase if available
+      if (conns.consensus_phase !== undefined && conns.consensus_phase !== '') {
+        var phaseElement = document.getElementById("consensusPhase");
+        if (phaseElement) {
+          phaseElement.textContent = conns.consensus_phase;
+          phaseElement.style.display = 'inline';
+          // Color based on phase
+          var phaseColors = {
+            'idle': '#6c757d',       // gray
+            'collecting': '#17a2b8', // cyan
+            'signing': '#ffc107',    // yellow
+            'broadcasting': '#28a745', // green
+            'completed': '#548c2f',  // success green
+            'failed': '#dc3545'      // red
+          };
+          phaseElement.style.backgroundColor = phaseColors[conns.consensus_phase.toLowerCase()] || '#6c757d';
+          phaseElement.title = 'Consensus phase: ' + conns.consensus_phase;
+        }
+      } else {
+        var phaseElement = document.getElementById("consensusPhase");
+        if (phaseElement) phaseElement.style.display = 'none';
+      }
     }
   });
   function refreshConnectionsStatus(connectionId) {

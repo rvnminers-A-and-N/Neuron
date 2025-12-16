@@ -2715,6 +2715,243 @@ def get_test_data():
             'message': error_message
         }), 500
 
+
+@app.route('/api/networking-mode', methods=['GET'])
+@authRequired
+def get_networking_mode():
+    """Get the current networking mode from config."""
+    try:
+        mode = config.get().get('networking mode', 'central')
+        return jsonify({'mode': mode})
+    except Exception as e:
+        return jsonify({'mode': 'central', 'error': str(e)})
+
+
+@app.route('/api/networking-mode', methods=['POST'])
+@authRequired
+def set_networking_mode():
+    """Set the networking mode in config (requires restart)."""
+    try:
+        data = request.json
+        mode = data.get('mode', 'central')
+        if mode not in ('central', 'hybrid', 'p2p'):
+            return jsonify({'success': False, 'error': 'Invalid mode'}), 400
+        config.add(data={'networking mode': mode})
+        logging.info(f"Networking mode set to: {mode}", color="cyan")
+        return jsonify({'success': True, 'mode': mode})
+    except Exception as e:
+        logging.warning(f"Failed to set networking mode: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/p2p-status', methods=['GET'])
+@authRequired
+def get_p2p_status():
+    """Get detailed P2P network status."""
+    try:
+        status = {
+            'connected': False,
+            'peer_count': 0,
+            'nat_type': 'Unknown',
+            'networking_mode': config.get().get('networking mode', 'central'),
+            'consensus_phase': '',
+        }
+        if hasattr(start, '_p2p_peers') and start._p2p_peers is not None:
+            peers = start._p2p_peers
+            status['connected'] = True
+            status['peer_count'] = len(peers.connected_peers) if hasattr(peers, 'connected_peers') else 0
+            status['nat_type'] = getattr(peers, 'nat_type', 'Unknown')
+            status['peer_id'] = str(getattr(peers, 'peer_id', ''))[:20] + '...' if hasattr(peers, 'peer_id') else ''
+        # Get consensus phase from distribution_trigger or signer_node
+        if hasattr(start, '_distribution_trigger') and start._distribution_trigger is not None:
+            phase = getattr(start._distribution_trigger, 'current_phase', None)
+            if phase is not None:
+                status['consensus_phase'] = str(phase.name) if hasattr(phase, 'name') else str(phase)
+        elif hasattr(start, '_signer_node') and start._signer_node is not None:
+            phase = getattr(start._signer_node, 'current_phase', None)
+            if phase is not None:
+                status['consensus_phase'] = str(phase.name) if hasattr(phase, 'name') else str(phase)
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/network', methods=['GET'])
+@vaultRequired
+@authRequired
+def network():
+    """P2P Network dashboard page."""
+    return render_template('network.html', **getResp({
+        'title': 'Network',
+    }))
+
+
+@app.route('/api/rewards/pending', methods=['GET'])
+@authRequired
+def get_pending_rewards():
+    """Get pending (unclaimed) rewards for this node."""
+    try:
+        rewards = []
+        # Check if P2P reward system is available
+        if hasattr(start, '_reward_calculator') and start._reward_calculator is not None:
+            pending = start._reward_calculator.get_pending_rewards()
+            for r in pending:
+                rewards.append({
+                    'round_id': r.get('round_id', ''),
+                    'stream_id': r.get('stream_id', ''),
+                    'amount': r.get('amount', 0),
+                    'score': r.get('score', 0),
+                })
+        return jsonify({'rewards': rewards})
+    except Exception as e:
+        logging.warning(f"Error getting pending rewards: {e}")
+        return jsonify({'rewards': [], 'error': str(e)})
+
+
+@app.route('/api/rewards/history', methods=['GET'])
+@authRequired
+def get_reward_history():
+    """Get reward history for this node."""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        history = []
+        # Check if P2P reward system is available
+        if hasattr(start, '_reward_calculator') and start._reward_calculator is not None:
+            hist = start._reward_calculator.get_reward_history(limit=limit)
+            for h in hist:
+                history.append({
+                    'date': h.get('date', ''),
+                    'round_id': h.get('round_id', ''),
+                    'amount': h.get('amount', 0),
+                    'txid': h.get('txid', ''),
+                })
+        return jsonify({'history': history})
+    except Exception as e:
+        logging.warning(f"Error getting reward history: {e}")
+        return jsonify({'history': [], 'error': str(e)})
+
+
+@app.route('/api/rewards/claim', methods=['POST'])
+@authRequired
+def claim_rewards():
+    """Claim specific rewards by round IDs."""
+    try:
+        data = request.json
+        round_ids = data.get('round_ids', [])
+        stream_id = data.get('stream_id', None)
+
+        if not round_ids:
+            return jsonify({'success': False, 'error': 'No round IDs provided'}), 400
+
+        # Check if P2P reward system is available
+        if hasattr(start, '_reward_calculator') and start._reward_calculator is not None:
+            result = start._reward_calculator.claim_rewards(
+                round_ids=round_ids,
+                stream_id=stream_id
+            )
+            return jsonify({
+                'success': result.get('success', False),
+                'txid': result.get('txid', ''),
+                'error': result.get('error', '')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'P2P reward system not available. Rewards are distributed automatically via consensus.'
+            })
+    except Exception as e:
+        logging.warning(f"Error claiming rewards: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/network/stats', methods=['GET'])
+@authRequired
+def get_network_stats():
+    """Get network statistics for the dashboard."""
+    try:
+        stats = {
+            'active_streams': 0,
+            'message_rate': 0,
+            'avg_latency': 0,
+            'consensus_rate': 0,
+        }
+        # Get stream count
+        if hasattr(start, 'relayStreams'):
+            stats['active_streams'] = len(start.relayStreams) if start.relayStreams else 0
+
+        # Get P2P stats if available
+        if hasattr(start, '_p2p_peers') and start._p2p_peers is not None:
+            peers = start._p2p_peers
+            if hasattr(peers, 'message_rate'):
+                stats['message_rate'] = getattr(peers, 'message_rate', 0)
+            if hasattr(peers, 'avg_latency'):
+                stats['avg_latency'] = getattr(peers, 'avg_latency', 0)
+
+        # Get consensus stats if available
+        if hasattr(start, '_consensus_manager') and start._consensus_manager is not None:
+            cm = start._consensus_manager
+            if hasattr(cm, 'success_rate'):
+                stats['consensus_rate'] = getattr(cm, 'success_rate', 0)
+
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({
+            'active_streams': 0,
+            'message_rate': 0,
+            'avg_latency': 0,
+            'consensus_rate': 0,
+            'error': str(e)
+        })
+
+
+@app.route('/api/peers/list', methods=['GET'])
+@authRequired
+def get_peers_list():
+    """Get list of connected peers with details."""
+    try:
+        peers = []
+        if hasattr(start, '_p2p_peers') and start._p2p_peers is not None:
+            p2p = start._p2p_peers
+            if hasattr(p2p, 'connected_peers'):
+                for peer in p2p.connected_peers:
+                    peer_info = {
+                        'id': str(getattr(peer, 'peer_id', getattr(peer, 'id', 'Unknown'))),
+                        'location': getattr(peer, 'location', None),
+                        'latency': getattr(peer, 'latency', None),
+                        'streams': getattr(peer, 'stream_count', 0),
+                        'role': getattr(peer, 'role', 'predictor'),
+                    }
+                    peers.append(peer_info)
+        return jsonify({'peers': peers})
+    except Exception as e:
+        return jsonify({'peers': [], 'error': str(e)})
+
+
+@app.route('/api/rewards/claim-all', methods=['POST'])
+@authRequired
+def claim_all_rewards():
+    """Claim all pending rewards."""
+    try:
+        # Check if P2P reward system is available
+        if hasattr(start, '_reward_calculator') and start._reward_calculator is not None:
+            result = start._reward_calculator.claim_all_rewards()
+            return jsonify({
+                'success': result.get('success', False),
+                'txid': result.get('txid', ''),
+                'claimed_count': result.get('claimed_count', 0),
+                'total_amount': result.get('total_amount', 0),
+                'error': result.get('error', '')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'P2P reward system not available. Rewards are distributed automatically via consensus.'
+            })
+    except Exception as e:
+        logging.warning(f"Error claiming all rewards: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/proposals/vote', methods=['POST'])
 @authRequired
 def proposalVote():

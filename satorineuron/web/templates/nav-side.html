@@ -139,6 +139,18 @@
         </a>
       </li>
 
+      <li class="nav-item">
+        <a class="nav-link text-white {{ 'active bg-gradient-primary-reverse' if title=='Network' else '' }}" href="{{ url_for('network') }}" onclick="showWorking();">
+          <div class="text-white text-center me-2 d-flex align-items-center justify-content-center">
+            <i class="material-icons opacity-10">hub</i>
+          </div>
+          <span class="nav-link-text ms-1">Network</span>
+        </a>
+      </li>
+      {% if title=='Network' %}
+      <li class='sub-nav-item'><a href='#' onclick="scrollOrJumpTo('rewardsbr');">Rewards</a></li>
+      {% endif %}
+
 <!--
       <li class="nav-item">
         <a class="nav-link text-white {{ 'active bg-gradient-primary-reverse' if title=='Proposals' else '' }}" href="{{ url_for('proposals') }}" onclick="showWorking();">
