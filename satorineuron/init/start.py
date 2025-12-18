@@ -103,6 +103,8 @@ def _get_p2p_modules():
         from satorip2p.protocol.stream_registry import StreamRegistry
         from satorip2p.protocol.oracle_network import OracleNetwork
         from satorip2p.protocol.prediction_protocol import PredictionProtocol
+        from satorip2p.protocol.lending import LendingManager, PoolConfig, LendRegistration
+        from satorip2p.protocol.delegation import DelegationManager, DelegationRecord, CharityUpdate
         from satorip2p.signing import (
             EvrmoreWallet as P2PEvrmoreWallet,
             sign_message,
@@ -132,6 +134,12 @@ def _get_p2p_modules():
             'StreamRegistry': StreamRegistry,
             'OracleNetwork': OracleNetwork,
             'PredictionProtocol': PredictionProtocol,
+            'LendingManager': LendingManager,
+            'PoolConfig': PoolConfig,
+            'LendRegistration': LendRegistration,
+            'DelegationManager': DelegationManager,
+            'DelegationRecord': DelegationRecord,
+            'CharityUpdate': CharityUpdate,
             'P2PEvrmoreWallet': P2PEvrmoreWallet,
             'sign_message': sign_message,
             'verify_message': verify_message,
@@ -961,10 +969,238 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
             elif SignerNode and not is_authorized_signer:
                 logging.debug("Not an authorized signer, skipping signer node initialization")
 
+            # 6. Initialize Oracle Network (for P2P observations)
+            OracleNetwork = modules.get('OracleNetwork')
+            if OracleNetwork and (not hasattr(self, '_oracle_network') or self._oracle_network is None):
+                try:
+                    self._oracle_network = OracleNetwork(self._p2p_peers)
+                    await self._oracle_network.start()
+                    logging.info("P2P oracle network initialized", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize oracle network: {e}")
+
+            # 7. Initialize Lending Manager (for P2P pool operations)
+            LendingManager = modules.get('LendingManager')
+            if LendingManager and (not hasattr(self, '_lending_manager') or self._lending_manager is None):
+                try:
+                    self._lending_manager = LendingManager(
+                        peers=self._p2p_peers,
+                        wallet=self.identity,
+                    )
+                    await self._lending_manager.start()
+                    logging.info("P2P lending manager initialized", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize lending manager: {e}")
+
+            # 8. Initialize Delegation Manager (for P2P proxy/delegation)
+            DelegationManager = modules.get('DelegationManager')
+            if DelegationManager and (not hasattr(self, '_delegation_manager') or self._delegation_manager is None):
+                try:
+                    self._delegation_manager = DelegationManager(
+                        peers=self._p2p_peers,
+                        wallet=self.identity,
+                    )
+                    await self._delegation_manager.start()
+                    logging.info("P2P delegation manager initialized", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize delegation manager: {e}")
+
+            # 9. Initialize Stream Registry (for P2P stream discovery)
+            StreamRegistry = modules.get('StreamRegistry')
+            if StreamRegistry and (not hasattr(self, '_stream_registry') or self._stream_registry is None):
+                try:
+                    self._stream_registry = StreamRegistry(self._p2p_peers)
+                    await self._stream_registry.start()
+                    logging.info("P2P stream registry initialized", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize stream registry: {e}")
+
+            # 11. Initialize Prediction Protocol (for P2P commit-reveal predictions)
+            PredictionProtocol = modules.get('PredictionProtocol')
+            if PredictionProtocol and (not hasattr(self, '_prediction_protocol') or self._prediction_protocol is None):
+                try:
+                    self._prediction_protocol = PredictionProtocol(self._p2p_peers)
+                    await self._prediction_protocol.start()
+                    logging.info("P2P prediction protocol initialized", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize prediction protocol: {e}")
+
+            # 10. Wire managers to P2PSatoriServerClient if available
+            if hasattr(self, 'server') and self.server is not None:
+                try:
+                    if hasattr(self.server, 'set_lending_manager'):
+                        self.server.set_lending_manager(getattr(self, '_lending_manager', None))
+                    if hasattr(self.server, 'set_delegation_manager'):
+                        self.server.set_delegation_manager(getattr(self, '_delegation_manager', None))
+                    if hasattr(self.server, 'set_oracle_network'):
+                        self.server.set_oracle_network(getattr(self, '_oracle_network', None))
+                    logging.info("P2P managers wired to server client", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to wire P2P managers to server: {e}")
+
+            # 12. Wire P2P events to WebSocket for real-time UI updates
+            self._wire_p2p_events_to_websocket()
+
             logging.info("P2P components initialization complete", color="cyan")
 
         except Exception as e:
             logging.warning(f"P2P component initialization failed: {e}")
+
+    def _wire_p2p_events_to_websocket(self):
+        """
+        Wire P2P component callbacks to WebSocket event emission.
+
+        This enables real-time updates in the web dashboard for:
+        - Heartbeats from network peers
+        - Predictions published/received
+        - Observations from oracles
+        - Consensus phase changes
+        - Pool/lending updates
+        - Delegation changes
+        """
+        if not callable(self.sendToUI):
+            logging.debug("sendToUI not available, skipping WebSocket wiring")
+            return
+
+        sendToUI = self.sendToUI
+
+        # Heartbeat callback
+        def on_heartbeat(heartbeat):
+            """Called when a heartbeat is received from the network."""
+            try:
+                node_id = getattr(heartbeat, 'node_id', '') or ''
+                address = getattr(heartbeat, 'evrmore_address', '') or ''
+                sendToUI('heartbeat', {
+                    'node_id': node_id[:16] + '...' if len(node_id) > 16 else node_id,
+                    'address': address[:12] + '...' if len(address) > 12 else address,
+                    'timestamp': getattr(heartbeat, 'timestamp', 0),
+                    'roles': getattr(heartbeat, 'roles', []),
+                })
+            except Exception as e:
+                logging.debug(f"Failed to emit heartbeat: {e}")
+
+        # Prediction callback
+        def on_prediction(prediction):
+            """Called when a prediction is received."""
+            try:
+                stream_id = getattr(prediction, 'stream_id', '') or ''
+                predictor = getattr(prediction, 'predictor', '') or ''
+                sendToUI('prediction', {
+                    'stream_id': stream_id[:16] + '...' if len(stream_id) > 16 else stream_id,
+                    'predictor': predictor[:12] + '...' if len(predictor) > 12 else predictor,
+                    'value': getattr(prediction, 'value', None),
+                    'timestamp': getattr(prediction, 'timestamp', None),
+                    'target_time': getattr(prediction, 'target_time', None),
+                })
+            except Exception as e:
+                logging.debug(f"Failed to emit prediction: {e}")
+
+        # Observation callback
+        def on_observation(observation):
+            """Called when an observation is received from an oracle."""
+            try:
+                stream_id = getattr(observation, 'stream_id', '') or ''
+                oracle = getattr(observation, 'oracle', '') or ''
+                sendToUI('observation', {
+                    'stream_id': stream_id[:16] + '...' if len(stream_id) > 16 else stream_id,
+                    'oracle': oracle[:12] + '...' if len(oracle) > 12 else oracle,
+                    'value': getattr(observation, 'value', None),
+                    'timestamp': getattr(observation, 'timestamp', None),
+                    'hash': getattr(observation, 'hash', None),
+                })
+            except Exception as e:
+                logging.debug(f"Failed to emit observation: {e}")
+
+        # Consensus callback
+        def on_consensus_change(phase, round_id=None):
+            """Called when consensus phase changes."""
+            try:
+                sendToUI('consensus', {
+                    'phase': str(phase),
+                    'round_id': round_id,
+                    'timestamp': int(time.time()),
+                })
+            except Exception as e:
+                logging.debug(f"Failed to emit consensus: {e}")
+
+        # Pool/lending callback
+        def on_pool_update(update_type, data):
+            """Called when pool/lending status changes."""
+            try:
+                sendToUI('pool_update', {
+                    'type': update_type,
+                    'data': data if isinstance(data, dict) else str(data),
+                    'timestamp': int(time.time()),
+                })
+            except Exception as e:
+                logging.debug(f"Failed to emit pool update: {e}")
+
+        # Delegation callback
+        def on_delegation_update(update_type, data):
+            """Called when delegation status changes."""
+            try:
+                sendToUI('delegation_update', {
+                    'type': update_type,
+                    'data': data if isinstance(data, dict) else str(data),
+                    'timestamp': int(time.time()),
+                })
+            except Exception as e:
+                logging.debug(f"Failed to emit delegation update: {e}")
+
+        # Wire callbacks to P2P components
+        try:
+            # Wire uptime tracker for heartbeats
+            if hasattr(self, '_uptime_tracker') and self._uptime_tracker:
+                tracker = self._uptime_tracker
+                if hasattr(tracker, 'on_heartbeat_received'):
+                    tracker.on_heartbeat_received = on_heartbeat
+                elif hasattr(tracker, 'set_callback'):
+                    tracker.set_callback('heartbeat', on_heartbeat)
+
+            # Wire prediction protocol
+            if hasattr(self, '_prediction_protocol') and self._prediction_protocol:
+                proto = self._prediction_protocol
+                if hasattr(proto, 'on_prediction_received'):
+                    proto.on_prediction_received = on_prediction
+                elif hasattr(proto, 'set_callback'):
+                    proto.set_callback('prediction', on_prediction)
+
+            # Wire oracle network
+            if hasattr(self, '_oracle_network') and self._oracle_network:
+                oracle = self._oracle_network
+                if hasattr(oracle, 'on_observation_received'):
+                    oracle.on_observation_received = on_observation
+                elif hasattr(oracle, 'set_callback'):
+                    oracle.set_callback('observation', on_observation)
+
+            # Wire consensus manager
+            if hasattr(self, '_consensus_manager') and self._consensus_manager:
+                consensus = self._consensus_manager
+                if hasattr(consensus, 'on_phase_change'):
+                    consensus.on_phase_change = on_consensus_change
+                elif hasattr(consensus, 'set_callback'):
+                    consensus.set_callback('phase_change', on_consensus_change)
+
+            # Wire lending manager
+            if hasattr(self, '_lending_manager') and self._lending_manager:
+                lending = self._lending_manager
+                if hasattr(lending, 'on_update'):
+                    lending.on_update = lambda data: on_pool_update('lending', data)
+                elif hasattr(lending, 'set_callback'):
+                    lending.set_callback('update', lambda data: on_pool_update('lending', data))
+
+            # Wire delegation manager
+            if hasattr(self, '_delegation_manager') and self._delegation_manager:
+                delegation = self._delegation_manager
+                if hasattr(delegation, 'on_update'):
+                    delegation.on_update = lambda data: on_delegation_update('delegation', data)
+                elif hasattr(delegation, 'set_callback'):
+                    delegation.set_callback('update', lambda data: on_delegation_update('delegation', data))
+
+            logging.info("P2P event callbacks wired to WebSocket", color="cyan")
+
+        except Exception as e:
+            logging.warning(f"Failed to wire P2P callbacks: {e}")
 
     async def discoverStreams(
         self,

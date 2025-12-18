@@ -1,0 +1,178 @@
+{% block content %}
+<div class="row">
+  <div class="col-xl-6 col-lg-6 col-sm-12 mb-xl-0 mb-4">
+    <div class="card {% if darkmode %}dark-colors{% endif %}">
+      <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+        <div class="row">
+          <div class="col-lg-8 col-8">
+            <h6 class="{% if darkmode %}dark-text{% endif %}">
+              <span class="live-indicator-p2p"></span>
+              P2P Network
+            </h6>
+          </div>
+          <div class="col-lg-4 col-4 text-end">
+            <a href="/network" class="btn btn-sm btn-outline-primary" title="Open Network Dashboard">
+              <i class="material-icons" style="font-size: 16px; vertical-align: middle;">open_in_new</i>
+            </a>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadP2PStatus();" title="Refresh">
+              <i class="material-icons" style="font-size: 16px; vertical-align: middle;">refresh</i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body {% if darkmode %}dark-colors{% endif %}">
+        <div class="row mb-2">
+          <div class="col-4 text-center">
+            <p class="text-xs text-uppercase text-muted mb-1">Mode</p>
+            <span id="p2pMode" class="badge bg-gradient-info">--</span>
+          </div>
+          <div class="col-4 text-center">
+            <p class="text-xs text-uppercase text-muted mb-1">Peers</p>
+            <h5 id="p2pPeerCount" class="mb-0 {% if darkmode %}dark-text{% endif %}">0</h5>
+          </div>
+          <div class="col-4 text-center">
+            <p class="text-xs text-uppercase text-muted mb-1">Uptime</p>
+            <h5 id="p2pUptime" class="mb-0 {% if darkmode %}dark-text{% endif %}">--</h5>
+          </div>
+        </div>
+        <hr class="horizontal {% if darkmode %}light{% else %}dark{% endif %} my-2">
+        <div class="row">
+          <div class="col-12">
+            <p class="text-xs text-uppercase text-muted mb-2">Recent Heartbeats</p>
+            <div id="p2pHeartbeats" style="max-height: 100px; overflow-y: auto; font-size: 11px;">
+              <p class="text-muted mb-0">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-6 col-lg-6 col-sm-12 mb-xl-0 mb-4">
+    <div class="card {% if darkmode %}dark-colors{% endif %}">
+      <div class="card-header pb-0 {% if darkmode %}dark-colors{% endif %}">
+        <h6 class="{% if darkmode %}dark-text{% endif %}">
+          <i class="material-icons text-primary" style="font-size: 18px; vertical-align: middle;">people</i>
+          Delegation Status
+        </h6>
+      </div>
+      <div class="card-body {% if darkmode %}dark-colors{% endif %}">
+        <div id="p2pDelegationInfo">
+          <div class="mb-3">
+            <p class="text-xs text-uppercase text-muted mb-1">My Delegate</p>
+            <p id="p2pMyDelegate" class="mb-0 {% if darkmode %}dark-text{% endif %}" style="font-size: 12px;">--</p>
+          </div>
+          <hr class="horizontal {% if darkmode %}light{% else %}dark{% endif %} my-2">
+          <p class="text-xs text-uppercase text-muted mb-2">Proxy Children</p>
+          <div id="p2pProxyChildren" style="max-height: 80px; overflow-y: auto; font-size: 11px;">
+            <p class="text-muted mb-0">None</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .live-indicator-p2p {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #22c55e;
+    border-radius: 50%;
+    margin-right: 5px;
+    animation: livePulseP2P 2s ease-in-out infinite;
+  }
+  @keyframes livePulseP2P {
+    0%, 100% { opacity: 1; box-shadow: 0 0 5px #22c55e; }
+    50% { opacity: 0.5; box-shadow: 0 0 15px #22c55e; }
+  }
+</style>
+
+<script>
+  function loadP2PStatus() {
+    // Load P2P health
+    fetch('/api/p2p/health', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const mode = data.mode || 'central';
+        document.getElementById('p2pMode').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+        document.getElementById('p2pMode').className = 'badge ' +
+          (mode === 'p2p' ? 'bg-gradient-success' : mode === 'hybrid' ? 'bg-gradient-info' : 'bg-gradient-secondary');
+        document.getElementById('p2pPeerCount').textContent = data.peer_count || 0;
+        if (data.uptime_pct !== undefined) {
+          document.getElementById('p2pUptime').textContent = data.uptime_pct.toFixed(1) + '%';
+        }
+      })
+      .catch(error => {
+        console.error('P2P status error:', error);
+        document.getElementById('p2pMode').textContent = 'Error';
+        document.getElementById('p2pMode').className = 'badge bg-gradient-danger';
+      });
+
+    // Load heartbeats
+    fetch('/api/p2p/heartbeats?limit=5', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const container = document.getElementById('p2pHeartbeats');
+        if (!data.heartbeats || data.heartbeats.length === 0) {
+          container.innerHTML = '<p class="text-muted mb-0">No recent heartbeats</p>';
+          return;
+        }
+        let html = '';
+        data.heartbeats.forEach(hb => {
+          const time = new Date(hb.timestamp * 1000).toLocaleTimeString();
+          html += `<div class="d-flex justify-content-between mb-1">
+            <span class="{% if darkmode %}dark-text{% endif %}">${hb.node_id}</span>
+            <span class="text-muted">${time}</span>
+          </div>`;
+        });
+        container.innerHTML = html;
+      })
+      .catch(error => {
+        document.getElementById('p2pHeartbeats').innerHTML = '<p class="text-muted mb-0">Could not load heartbeats</p>';
+      });
+
+    // Load delegations
+    fetch('/api/p2p/delegations', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        // My delegate
+        const delegateEl = document.getElementById('p2pMyDelegate');
+        if (data.my_delegate) {
+          delegateEl.innerHTML = `<code style="font-size: 10px;">${data.my_delegate.parent_address}</code>
+            <span class="badge badge-sm ${data.my_delegate.charity ? 'bg-gradient-warning' : 'bg-gradient-info'} ms-1">
+              ${data.my_delegate.charity ? 'Charity' : 'Standard'}
+            </span>`;
+        } else {
+          delegateEl.textContent = 'Not delegating';
+        }
+
+        // Proxy children
+        const childrenEl = document.getElementById('p2pProxyChildren');
+        if (data.my_children && data.my_children.length > 0) {
+          let html = '';
+          data.my_children.forEach(child => {
+            html += `<div class="d-flex justify-content-between mb-1">
+              <span class="{% if darkmode %}dark-text{% endif %}" style="font-family: monospace;">${child.child_address.substring(0, 12)}...</span>
+              <span class="badge badge-sm ${child.charity ? 'bg-gradient-warning' : 'bg-gradient-secondary'}">
+                ${child.charity ? 'Charity' : child.amount ? child.amount.toFixed(2) : '--'}
+              </span>
+            </div>`;
+          });
+          childrenEl.innerHTML = html;
+        } else {
+          childrenEl.innerHTML = '<p class="text-muted mb-0">No proxy children</p>';
+        }
+      })
+      .catch(error => {
+        console.error('Delegation error:', error);
+      });
+  }
+
+  // Load on page load and refresh every 30 seconds
+  document.addEventListener('DOMContentLoaded', function() {
+    loadP2PStatus();
+    setInterval(loadP2PStatus, 30000);
+  });
+</script>
+{% endblock %}
