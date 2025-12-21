@@ -13,12 +13,15 @@
           </div>
           <div class="text-center pt-1">
             <h4 class="mb-0 {% if darkmode %}dark-colors{% endif %}">{{ wallet.balance.amount }}</h4>
-            <p class="text-sm mb-0 text-capitalize {% if darkmode %}dark-colors{% endif %}">SATORI</p>{%if wallet.isTestnet %}<p class="text-sm mb-0 {% if darkmode %}dark-colors{% endif %}">(testnet)</p>{%endif%}
+            <p class="text-sm mb-0 text-capitalize {% if darkmode %}dark-colors{% endif %}">SATORI</p>
+            <p id="satoriUsdValue" class="text-xs mb-0 text-muted" style="font-size: 0.75rem;"></p>
+            {%if wallet.isTestnet %}<p class="text-sm mb-0 {% if darkmode %}dark-colors{% endif %}">(testnet)</p>{%endif%}
           </div>
         </div>
         <hr class="dark horizontal my-0">
         <div class="card-footer p-1">
           <p class="mb-0 {% if darkmode %}dark-colors{% endif %}" style="text-align:center;"><span class="font-weight-normal">{{ wallet.currency.amount }} </span>{{ wallet.chain }}</p>
+          <p id="evrUsdValue" class="text-xs mb-0 text-muted" style="text-align:center; font-size: 0.75rem;"></p>
         </div>
         <hr class="dark horizontal my-0">
         <center>
@@ -125,6 +128,45 @@
   </div>
 </div>
 <script>
+  // Load USD values on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    loadWalletUsdValues();
+  });
+
+  async function loadWalletUsdValues() {
+    try {
+      // Get balance amounts from page
+      const satoriBalance = parseFloat('{{ wallet.balance.amount }}') || 0;
+      const evrBalance = parseFloat('{{ wallet.currency.amount }}') || 0;
+
+      // Fetch SATORI price
+      const satoriResponse = await fetch('/api/p2p/pricing/satori');
+      if (satoriResponse.ok) {
+        const satoriData = await satoriResponse.json();
+        if (satoriData.success && satoriData.price && satoriData.price.last) {
+          const satoriPrice = parseFloat(satoriData.price.last) || 0;
+          const satoriUsd = (satoriBalance * satoriPrice).toFixed(2);
+          const el = document.getElementById('satoriUsdValue');
+          if (el) el.innerText = '~$' + satoriUsd + ' USDT';
+        }
+      }
+
+      // Fetch EVR price
+      const evrResponse = await fetch('/api/p2p/pricing/evr');
+      if (evrResponse.ok) {
+        const evrData = await evrResponse.json();
+        if (evrData.success && evrData.price && evrData.price.last) {
+          const evrPrice = parseFloat(evrData.price.last) || 0;
+          const evrUsd = (evrBalance * evrPrice).toFixed(2);
+          const el = document.getElementById('evrUsdValue');
+          if (el) el.innerText = '~$' + evrUsd + ' USDT';
+        }
+      }
+    } catch (error) {
+      console.error('Error loading USD values:', error);
+    }
+  }
+
 	function validateWalletJs() {
 		return (
 			document.getElementById("address").value != "" &&

@@ -51,10 +51,116 @@
       </div>
     </div>
   </div>
+
+  <!-- Current Lendings Section -->
+  <div class="col-xl-6 col-sm-12 mb-xl-0 mb-4" style="margin-top: 1rem;">
+    <div class="card {% if darkmode %}dark-colors{% endif %}">
+      <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+        <div class="col-xl-12 col-sm-12 mb-xl-0">
+          <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                  style="padding-top:1.5rem; text-transform: none;"
+                  type="button"
+                  data-toggle="collapse"
+                  data-target="#currentLendingsContent"
+                  aria-expanded="true"
+                  aria-controls="currentLendingsContent">
+                  <h4 class="{% if darkmode %}dark-colors{% endif %}">My Pool Participations</h4>
+          </button>
+        </div>
+      </div>
+      <div id="currentLendingsContent" class="collapse show">
+        <div class="row" style='padding-left:2rem;padding-right:2rem; padding-bottom: 1rem;'>
+          <div class="col-xl-12 col-sm-12">
+            <button class="btn btn-sm btn-outline-primary" onclick="loadCurrentLendings()">Refresh</button>
+          </div>
+        </div>
+        <div class="table-responsive" style="padding: 0 2rem 2rem 2rem;">
+          <table class="table align-items-center mb-0 {% if darkmode %}table-dark{% endif %}">
+            <thead>
+              <tr>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Pool Address</th>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Joined</th>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="currentLendingsTable">
+              <tr>
+                <td colspan="3" class="text-center text-sm {% if darkmode %}dark-colors{% endif %}">
+                  Loading...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 <script>
   document.addEventListener('DOMContentLoaded', (event) => {
     getLendingAddress();
+    loadCurrentLendings();
   });
+
+  function loadCurrentLendings() {
+    fetch('/lend/addresses', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.getElementById('currentLendingsTable');
+
+        if (!data.lendings || data.lendings.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="text-center text-sm">No pool participations</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.lendings.map(l => {
+          const addrShort = l.vault_address ? l.vault_address.substring(0, 12) + '...' : 'Unknown';
+          const joined = l.timestamp ? new Date(l.timestamp * 1000).toLocaleDateString() : 'Unknown';
+
+          return `
+            <tr>
+              <td class="text-sm" style="font-family: monospace;" title="${l.vault_address}">${addrShort}</td>
+              <td class="text-sm">${joined}</td>
+              <td class="text-sm">
+                <button class="btn btn-sm btn-danger" onclick="leaveLending('${l.vault_address}')">Leave</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      })
+      .catch(error => {
+        console.error('Error loading lendings:', error);
+        document.getElementById('currentLendingsTable').innerHTML =
+          '<tr><td colspan="3" class="text-center text-sm">Error loading lendings</td></tr>';
+      });
+  }
+
+  function leaveLending(vaultAddress) {
+    if (!confirm('Are you sure you want to leave this pool?')) {
+      return;
+    }
+
+    fetch('/lend/remove', { method: 'GET' })
+      .then(response => {
+        if (response.ok) {
+          return response.text();
+        } else {
+          throw new Error('Network response was not ok.');
+        }
+      })
+      .then(text => {
+        if (text === 'OK') {
+          alert('Left pool successfully');
+          loadCurrentLendings();
+          getLendingAddress();
+        } else {
+          alert('Failed to leave pool');
+        }
+      })
+      .catch(error => {
+        console.error('Error leaving pool:', error);
+        alert('Error leaving pool');
+      });
+  }
   function getLendingAddress() {
     return fetch('/lend/address', { method: 'GET' })
       .then(response => {

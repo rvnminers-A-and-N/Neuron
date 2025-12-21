@@ -1,4 +1,74 @@
 {% block content %}
+  <!-- Custom Payout Address (P2P Rewards) -->
+  <div class="col-xl-6 col-sm-12 mb-xl-0 mb-4">
+    <div class="card {% if darkmode %}dark-colors{% endif %}">
+      <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+        <div class="col-xl-12 col-sm-12 mb-xl-0">
+          <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                  style="padding-top:1.5rem; text-transform: none;"
+                  type="button"
+                  data-toggle="collapse"
+                  data-target="#payoutCardContent"
+                  aria-expanded="false"
+                  aria-controls="payoutCardContent">
+                  <h4 class="{% if darkmode %}dark-colors{% endif %}">Payout Address</h4>
+          </button>
+        </div>
+      </div>
+      <div id="payoutCardContent" class="collapse show">
+        <p class="text-sm mb-0 text-center {% if darkmode %}dark-colors{% endif %} padding-left-right-5">
+          Set a custom address to receive P2P rewards (e.g., cold wallet, hardware wallet).
+          <br>
+          Leave empty to receive rewards at your wallet address.
+          <br><br>
+        </p>
+        <div class="row" style='padding-left:2rem;padding-right:2rem; padding-top: .1rem; padding-bottom: 1rem;'>
+          <div class="col-xl-3 col-sm-3 mb-xl-0">
+            <center>
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}" style="padding-top: .25rem;">
+                Payout Address:
+              </p>
+            </center>
+          </div>
+          <div class="col-xl-6 col-sm-6 mb-xl-0">
+            <h6 class="mb-0 text-sm {% if darkmode %}dark-text{% endif %}">
+              <div class="d-flex px-3 py-1" style="padding-right: 1rem; margin-left:auto; margin-right: auto;">
+                <div class="input-group input-group-outline">
+                  <input
+                    id="payoutAddress"
+                    name="payoutAddress"
+                    placeholder="{{ wallet.address }}"
+                    class="tight form-control {% if darkmode %}dark-colors{% endif %}"
+                    style="text-align: center;"
+                    maxlength="34"
+                    min="34"
+                    required=""
+                    size="34"
+                    type="text"
+                    onclick="focus(this)"
+                    onfocus="focus(this)"
+                    onfocusout="defocused(this)"
+                    onkeypress="checkEnterForPayoutAddress(event)">
+                </div>
+              </div>
+            </h6>
+          </div>
+          <div class="col-xl-3 col-sm-3 mb-xl-0">
+            <p id='payoutAddressConfirmation'></p>
+          </div>
+        </div>
+        <div class="row" style='padding-left:2rem;padding-right:2rem; padding-bottom: 2rem;'>
+          <div class="col-xl-12 col-sm-12 text-center">
+            <span id="currentPayoutStatus" class="text-sm {% if darkmode %}dark-colors{% endif %}" style="color: grey;">
+              Loading current payout address...
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mining Reward Address (Legacy) -->
   <div class="col-xl-6 col-sm-12 mb-xl-0 mb-4">
     <div class="card {% if darkmode %}dark-colors{% endif %}">
       <div class="row" style='padding-left:2rem;padding-right:2rem;'>
@@ -10,7 +80,7 @@
                   data-target="#vaultCardContent"
                   aria-expanded="false"
                   aria-controls="vaultCardContent">
-                  <h4 class="{% if darkmode %}dark-colors{% endif %}">Reward Address</h4>
+                  <h4 class="{% if darkmode %}dark-colors{% endif %}">Mining Address</h4>
           </button>
         </div>
       </div>
@@ -61,6 +131,90 @@
     </div>
   </div>
 <script>
+  // Payout Address Functions (P2P Rewards)
+  document.addEventListener('DOMContentLoaded', (event) => {
+    getPayoutAddress();
+  });
+
+  function getPayoutAddress() {
+    fetch('/reward-address', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        if (data.has_custom && data.reward_address) {
+          document.getElementById('payoutAddress').value = data.reward_address;
+          document.getElementById('currentPayoutStatus').innerHTML =
+            'Current payout address: <code>' + data.reward_address + '</code> ' +
+            '<a href="#" onclick="removePayoutAddress()" style="color: #f44336;">[Remove]</a>';
+        } else {
+          document.getElementById('currentPayoutStatus').innerHTML =
+            'Rewards will be sent to your wallet address.';
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('currentPayoutStatus').innerHTML = 'Unable to load payout address.';
+      });
+  }
+
+  function checkEnterForPayoutAddress(event) {
+    if (isFocused(document.querySelector('#payoutAddress'))) {
+      document.getElementById('payoutAddressConfirmation').innerHTML = '';
+      if (event.key === 'Enter' || event.keyCode === 13) {
+        setPayoutAddress();
+      }
+    }
+  }
+
+  function setPayoutAddress() {
+    const address = document.getElementById('payoutAddress').value;
+    if (!address || address.length === 0) {
+      removePayoutAddress();
+      return;
+    }
+    if (address.length !== 34) {
+      document.getElementById('payoutAddressConfirmation').innerHTML = 'Invalid address.';
+      return;
+    }
+
+    fetch('/reward-address', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payout_address: address, memo: 'Custom payout' })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('payoutAddressConfirmation').innerHTML = 'Saved!';
+        getPayoutAddress();
+      } else {
+        document.getElementById('payoutAddressConfirmation').innerHTML = data.error || 'Unable to save.';
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      document.getElementById('payoutAddressConfirmation').innerHTML = 'Unable to save.';
+    });
+  }
+
+  function removePayoutAddress() {
+    fetch('/reward-address/remove', { method: 'POST' })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById('payoutAddress').value = '';
+          document.getElementById('payoutAddressConfirmation').innerHTML = 'Removed!';
+          getPayoutAddress();
+        } else {
+          document.getElementById('payoutAddressConfirmation').innerHTML = data.error || 'Unable to remove.';
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('payoutAddressConfirmation').innerHTML = 'Unable to remove.';
+      });
+  }
+
+  // Mining Reward Address Functions (Legacy)
   function focusedForRewardAddress(thing){
     focus(thing);
     console.log(thing.value);

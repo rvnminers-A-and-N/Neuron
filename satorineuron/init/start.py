@@ -110,6 +110,19 @@ def _get_p2p_modules():
             sign_message,
             verify_message,
         )
+        # New protocol features: versioning, storage, bandwidth
+        from satorip2p.protocol.versioning import (
+            ProtocolVersion, VersionNegotiator, PeerVersionTracker,
+            PROTOCOL_VERSION, MIN_SUPPORTED_VERSION, get_current_version,
+        )
+        from satorip2p.protocol.storage import (
+            StorageManager, DeferredRewardsStorage, AlertStorage,
+            MemoryBackend, FileBackend, DHTBackend,
+        )
+        from satorip2p.protocol.bandwidth import (
+            BandwidthTracker, QoSManager, QoSPolicy, MessagePriority,
+            create_qos_manager, get_priority_for_message_type,
+        )
         return {
             'available': True,
             'Peers': Peers,
@@ -144,6 +157,25 @@ def _get_p2p_modules():
             'sign_message': sign_message,
             'verify_message': verify_message,
             'NetworkingMode': NetworkingMode,
+            # New protocol features
+            'ProtocolVersion': ProtocolVersion,
+            'VersionNegotiator': VersionNegotiator,
+            'PeerVersionTracker': PeerVersionTracker,
+            'PROTOCOL_VERSION': PROTOCOL_VERSION,
+            'MIN_SUPPORTED_VERSION': MIN_SUPPORTED_VERSION,
+            'get_current_version': get_current_version,
+            'StorageManager': StorageManager,
+            'DeferredRewardsStorage': DeferredRewardsStorage,
+            'AlertStorage': AlertStorage,
+            'MemoryBackend': MemoryBackend,
+            'FileBackend': FileBackend,
+            'DHTBackend': DHTBackend,
+            'BandwidthTracker': BandwidthTracker,
+            'QoSManager': QoSManager,
+            'QoSPolicy': QoSPolicy,
+            'MessagePriority': MessagePriority,
+            'create_qos_manager': create_qos_manager,
+            'get_priority_for_message_type': get_priority_for_message_type,
         }
     except ImportError:
         return {'available': False}
@@ -1015,7 +1047,7 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 except Exception as e:
                     logging.warning(f"Failed to initialize stream registry: {e}")
 
-            # 11. Initialize Prediction Protocol (for P2P commit-reveal predictions)
+            # 10. Initialize Prediction Protocol (for P2P commit-reveal predictions)
             PredictionProtocol = modules.get('PredictionProtocol')
             if PredictionProtocol and (not hasattr(self, '_prediction_protocol') or self._prediction_protocol is None):
                 try:
@@ -1025,7 +1057,56 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                 except Exception as e:
                     logging.warning(f"Failed to initialize prediction protocol: {e}")
 
-            # 10. Wire managers to P2PSatoriServerClient if available
+            # 11. Initialize Protocol Versioning
+            PeerVersionTracker = modules.get('PeerVersionTracker')
+            VersionNegotiator = modules.get('VersionNegotiator')
+            PROTOCOL_VERSION = modules.get('PROTOCOL_VERSION')
+            if PeerVersionTracker and (not hasattr(self, '_version_tracker') or self._version_tracker is None):
+                try:
+                    self._version_tracker = PeerVersionTracker()
+                    if VersionNegotiator:
+                        self._version_negotiator = VersionNegotiator()
+                    self._protocol_version = PROTOCOL_VERSION or '1.0.0'
+                    logging.info(f"P2P protocol versioning initialized (v{self._protocol_version})", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize version tracker: {e}")
+
+            # 12. Initialize Storage Manager (redundant storage for deferred rewards & alerts)
+            StorageManager = modules.get('StorageManager')
+            DeferredRewardsStorage = modules.get('DeferredRewardsStorage')
+            AlertStorage = modules.get('AlertStorage')
+            if StorageManager and (not hasattr(self, '_storage_manager') or self._storage_manager is None):
+                try:
+                    import os
+                    storage_dir = os.path.expanduser('~/.satori/storage')
+                    self._storage_manager = StorageManager(storage_dir=storage_dir)
+                    if DeferredRewardsStorage:
+                        self._deferred_rewards_storage = DeferredRewardsStorage(
+                            storage_dir=storage_dir,
+                            dht_client=getattr(self._p2p_peers, 'dht', None) if self._p2p_peers else None,
+                        )
+                    if AlertStorage:
+                        self._alert_storage = AlertStorage(
+                            storage_dir=storage_dir,
+                            dht_client=getattr(self._p2p_peers, 'dht', None) if self._p2p_peers else None,
+                        )
+                    logging.info("P2P storage manager initialized (redundant storage enabled)", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize storage manager: {e}")
+
+            # 13. Initialize Bandwidth Tracker & QoS Manager
+            BandwidthTracker = modules.get('BandwidthTracker')
+            create_qos_manager = modules.get('create_qos_manager')
+            if BandwidthTracker and (not hasattr(self, '_bandwidth_tracker') or self._bandwidth_tracker is None):
+                try:
+                    self._bandwidth_tracker = BandwidthTracker()
+                    if create_qos_manager:
+                        self._qos_manager = create_qos_manager(self._bandwidth_tracker)
+                    logging.info("P2P bandwidth tracker and QoS manager initialized", color="cyan")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize bandwidth tracker: {e}")
+
+            # 14. Wire managers to P2PSatoriServerClient if available
             if hasattr(self, 'server') and self.server is not None:
                 try:
                     if hasattr(self.server, 'set_lending_manager'):
@@ -1034,6 +1115,17 @@ class StartupDag(StartupDagStruct, metaclass=SingletonMeta):
                         self.server.set_delegation_manager(getattr(self, '_delegation_manager', None))
                     if hasattr(self.server, 'set_oracle_network'):
                         self.server.set_oracle_network(getattr(self, '_oracle_network', None))
+                    # Wire new protocol feature managers
+                    if hasattr(self.server, 'set_version_tracker'):
+                        self.server.set_version_tracker(getattr(self, '_version_tracker', None))
+                    if hasattr(self.server, 'set_version_negotiator'):
+                        self.server.set_version_negotiator(getattr(self, '_version_negotiator', None))
+                    if hasattr(self.server, 'set_storage_manager'):
+                        self.server.set_storage_manager(getattr(self, '_storage_manager', None))
+                    if hasattr(self.server, 'set_bandwidth_tracker'):
+                        self.server.set_bandwidth_tracker(getattr(self, '_bandwidth_tracker', None))
+                    if hasattr(self.server, 'set_qos_manager'):
+                        self.server.set_qos_manager(getattr(self, '_qos_manager', None))
                     logging.info("P2P managers wired to server client", color="cyan")
                 except Exception as e:
                     logging.warning(f"Failed to wire P2P managers to server: {e}")

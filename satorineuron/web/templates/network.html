@@ -383,6 +383,90 @@
       </div>
     </div>
 
+    <!-- Protocol Status Row (Versioning, Storage, Bandwidth) -->
+    <div class="row mb-4">
+      <div class="col-xl-4 col-md-6 mb-3">
+        <div class="card metric-card {% if darkmode %}dark-colors{% endif %} h-100">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <p class="text-xs mb-0 text-uppercase text-muted">Protocol Version</p>
+                <h5 id="protocolVersion" class="{% if darkmode %}dark-text{% endif %} mb-0">v1.0.0</h5>
+              </div>
+              <span id="versionBadge" class="badge bg-gradient-success">Current</span>
+            </div>
+            <div class="row mt-2">
+              <div class="col-6">
+                <p class="text-xs text-muted mb-0">Compatible Peers</p>
+                <span id="compatiblePeers" class="{% if darkmode %}dark-text{% endif %} font-weight-bold">0%</span>
+              </div>
+              <div class="col-6">
+                <p class="text-xs text-muted mb-0">Features</p>
+                <span id="featureCount" class="{% if darkmode %}dark-text{% endif %} font-weight-bold">0</span>
+              </div>
+            </div>
+            <div class="progress mt-2" style="height: 6px;" title="Upgrade Progress">
+              <div id="upgradeProgress" class="progress-bar bg-gradient-success" role="progressbar" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4 col-md-6 mb-3">
+        <div class="card metric-card {% if darkmode %}dark-colors{% endif %} h-100">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <p class="text-xs mb-0 text-uppercase text-muted">Storage Redundancy</p>
+                <h5 id="diskUsage" class="{% if darkmode %}dark-text{% endif %} mb-0">0 MB</h5>
+              </div>
+              <span id="storageBadge" class="badge bg-gradient-success">Healthy</span>
+            </div>
+            <div class="row mt-2">
+              <div class="col-4 text-center">
+                <p class="text-xs text-muted mb-0">Memory</p>
+                <span id="memoryBackend" class="badge badge-sm bg-gradient-success">Active</span>
+              </div>
+              <div class="col-4 text-center">
+                <p class="text-xs text-muted mb-0">File</p>
+                <span id="fileBackend" class="badge badge-sm bg-gradient-secondary">Off</span>
+              </div>
+              <div class="col-4 text-center">
+                <p class="text-xs text-muted mb-0">DHT</p>
+                <span id="dhtBackend" class="badge badge-sm bg-gradient-secondary">Off</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4 col-md-12 mb-3">
+        <div class="card metric-card {% if darkmode %}dark-colors{% endif %} h-100">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <p class="text-xs mb-0 text-uppercase text-muted">Bandwidth & QoS</p>
+                <h5 id="bandwidthTotal" class="{% if darkmode %}dark-text{% endif %} mb-0">0 B</h5>
+              </div>
+              <span id="qosBadge" class="badge bg-gradient-info">Normal</span>
+            </div>
+            <div class="row mt-2">
+              <div class="col-4">
+                <p class="text-xs text-muted mb-0">Sent</p>
+                <span id="bytesSent" class="{% if darkmode %}dark-text{% endif %} text-sm">0 B</span>
+              </div>
+              <div class="col-4">
+                <p class="text-xs text-muted mb-0">Recv</p>
+                <span id="bytesRecv" class="{% if darkmode %}dark-text{% endif %} text-sm">0 B</span>
+              </div>
+              <div class="col-4">
+                <p class="text-xs text-muted mb-0">Drops</p>
+                <span id="qosDrops" class="{% if darkmode %}dark-text{% endif %} text-sm">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Main Network Visualization -->
     <div class="row mb-4">
       <div class="col-xl-9 col-12 mb-4">
@@ -1552,6 +1636,9 @@
     fetchP2PStatus();
     loadPoolStatus();
     loadDelegationStatus();
+    fetchProtocolVersion();
+    fetchStorageStatus();
+    fetchBandwidthStats();
   }
 
   function fetchP2PStatus() {
@@ -1913,6 +2000,120 @@
         }
       })
       .catch(error => console.error('Error:', error));
+  }
+
+  // ============================================
+  // PROTOCOL MONITORING
+  // ============================================
+  function fetchProtocolVersion() {
+    fetch('/api/p2p/version', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('protocolVersion').textContent = 'v' + (data.current_version || '1.0.0');
+
+        const stats = data.peer_stats || {};
+        const total = stats.total || 0;
+        const compatible = stats.compatible || 0;
+        const pct = total > 0 ? Math.round((compatible / total) * 100) : 100;
+        document.getElementById('compatiblePeers').textContent = pct + '%';
+        document.getElementById('featureCount').textContent = (data.features || []).length;
+
+        const progress = data.upgrade_progress || 100;
+        document.getElementById('upgradeProgress').style.width = progress + '%';
+
+        const badge = document.getElementById('versionBadge');
+        if (progress >= 100) {
+          badge.className = 'badge bg-gradient-success';
+          badge.textContent = 'Current';
+        } else if (progress >= 80) {
+          badge.className = 'badge bg-gradient-info';
+          badge.textContent = 'Upgrading';
+        } else {
+          badge.className = 'badge bg-gradient-warning';
+          badge.textContent = 'Mixed';
+        }
+      })
+      .catch(error => console.error('Protocol version error:', error));
+  }
+
+  function fetchStorageStatus() {
+    fetch('/api/p2p/storage', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const usage = data.disk_usage || {};
+        const mb = usage.used_mb || 0;
+        document.getElementById('diskUsage').textContent = mb < 1024 ? mb.toFixed(1) + ' MB' : (mb / 1024).toFixed(2) + ' GB';
+
+        const backends = data.backends || {};
+        updateBackendBadge('memoryBackend', backends.memory);
+        updateBackendBadge('fileBackend', backends.file);
+        updateBackendBadge('dhtBackend', backends.dht);
+
+        const badge = document.getElementById('storageBadge');
+        const status = data.status || 'healthy';
+        if (status === 'healthy') {
+          badge.className = 'badge bg-gradient-success';
+          badge.textContent = 'Healthy';
+        } else if (status === 'warning') {
+          badge.className = 'badge bg-gradient-warning';
+          badge.textContent = 'Warning';
+        } else {
+          badge.className = 'badge bg-gradient-danger';
+          badge.textContent = 'Error';
+        }
+      })
+      .catch(error => console.error('Storage status error:', error));
+  }
+
+  function updateBackendBadge(elementId, backend) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    if (backend && backend.active) {
+      el.className = 'badge badge-sm bg-gradient-success';
+      el.textContent = 'Active';
+    } else {
+      el.className = 'badge badge-sm bg-gradient-secondary';
+      el.textContent = 'Off';
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function fetchBandwidthStats() {
+    fetch('/api/p2p/bandwidth', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const global = data.global || {};
+        const sent = global.bytes_sent || 0;
+        const recv = global.bytes_received || 0;
+
+        document.getElementById('bandwidthTotal').textContent = formatBytes(sent + recv);
+        document.getElementById('bytesSent').textContent = formatBytes(sent);
+        document.getElementById('bytesRecv').textContent = formatBytes(recv);
+
+        const qos = data.qos || {};
+        document.getElementById('qosDrops').textContent = qos.drops || 0;
+
+        const badge = document.getElementById('qosBadge');
+        if (qos.throttling) {
+          badge.className = 'badge bg-gradient-warning';
+          badge.textContent = 'Throttled';
+        } else if (qos.enabled) {
+          badge.className = 'badge bg-gradient-success';
+          badge.textContent = 'QoS Active';
+        } else {
+          badge.className = 'badge bg-gradient-info';
+          badge.textContent = 'Normal';
+        }
+      })
+      .catch(error => console.error('Bandwidth stats error:', error));
   }
 
   // ============================================

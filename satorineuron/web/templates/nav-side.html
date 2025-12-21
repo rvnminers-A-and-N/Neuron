@@ -151,6 +151,34 @@
       <li class='sub-nav-item'><a href='#' onclick="scrollOrJumpTo('rewardsbr');">Rewards</a></li>
       {% endif %}
 
+      <li class="nav-item">
+        <a class="nav-link text-white {{ 'active bg-gradient-primary-reverse' if title=='Donate' else '' }}" href="{{ url_for('donate') }}" onclick="showWorking();">
+          <div class="text-white text-center me-2 d-flex align-items-center justify-content-center">
+            <i class="material-icons opacity-10">volunteer_activism</i>
+          </div>
+          <span class="nav-link-text ms-1">Donate</span>
+        </a>
+      </li>
+      {% if title=='Donate' %}
+      <li class='sub-nav-item'><a href='#' onclick="scrollOrJumpTo('donationHistoryContent');">History</a></li>
+      <li class='sub-nav-item'><a href='#' onclick="scrollOrJumpTo('topDonorsContent');">Leaderboard</a></li>
+      {% endif %}
+
+      {% if is_signer %}
+      <li class="nav-item">
+        <a class="nav-link text-white {{ 'active bg-gradient-primary-reverse' if title=='Signer Admin' else '' }}" href="{{ url_for('signer_admin') }}" onclick="showWorking();">
+          <div class="text-white text-center me-2 d-flex align-items-center justify-content-center">
+            <i class="material-icons opacity-10">admin_panel_settings</i>
+          </div>
+          <span class="nav-link-text ms-1">Signer Admin</span>
+        </a>
+      </li>
+      {% if title=='Signer Admin' %}
+      <li class='sub-nav-item'><a href='#' onclick="scrollOrJumpTo('pendingRequestsContent');">Pending</a></li>
+      <li class='sub-nav-item'><a href='#' onclick="scrollOrJumpTo('activityLogContent');">Activity</a></li>
+      {% endif %}
+      {% endif %}
+
 <!--
       <li class="nav-item">
         <a class="nav-link text-white {{ 'active bg-gradient-primary-reverse' if title=='Proposals' else '' }}" href="{{ url_for('proposals') }}" onclick="showWorking();">

@@ -310,6 +310,14 @@ def getResp(resp: Union[dict, None] = None) -> dict:
     except Exception as e:
         logging.debug(e)
         evrvaultaddressforward = 0
+    # Check if user is an authorized signer
+    is_signer = False
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'isAuthorizedSigner'):
+                is_signer = start.server.isAuthorizedSigner()
+    except Exception:
+        pass
     return {
         'version': VERSION,
         'lockEnabled': isActuallyLocked(),
@@ -324,6 +332,7 @@ def getResp(resp: Union[dict, None] = None) -> dict:
         'holdingBalanceBase': holdingBalanceBase,
         'ethaddressforward': ethaddressforward,
         'evrvaultaddressforward': evrvaultaddressforward,
+        'is_signer': is_signer,
         **(resp or {})}
 
 
@@ -3959,4 +3968,908 @@ def apiNetworkingMode():
 
     except Exception as e:
         logging.error(f"Networking mode failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+###############################################################################
+## P2P Protocol Monitoring Routes #############################################
+###############################################################################
+
+
+@app.route('/api/p2p/version', methods=['GET'])
+@authRequired
+def apiP2PVersion():
+    """Get protocol version info and peer version distribution."""
+    try:
+        result = {
+            'current_version': '1.0.0',
+            'min_supported': '1.0.0',
+            'peer_stats': {
+                'total': 0,
+                'compatible': 0,
+                'needs_upgrade': 0,
+                'incompatible': 0,
+            },
+            'features': [],
+            'upgrade_progress': 100,
+        }
+
+        # Get version info from P2P peers
+        if hasattr(start, '_p2p_peers') and start._p2p_peers:
+            peers = start._p2p_peers
+            if hasattr(peers, 'get_peer_count'):
+                result['peer_stats']['total'] = peers.get_peer_count()
+
+            # Try to get version manager info
+            if hasattr(peers, '_version_manager'):
+                vm = peers._version_manager
+                if hasattr(vm, 'current_version'):
+                    result['current_version'] = str(vm.current_version)
+                if hasattr(vm, 'min_supported_version'):
+                    result['min_supported'] = str(vm.min_supported_version)
+                if hasattr(vm, 'get_peer_version_stats'):
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    try:
+                        stats = loop.run_until_complete(vm.get_peer_version_stats())
+                        result['peer_stats'].update(stats)
+                    finally:
+                        loop.close()
+                if hasattr(vm, 'get_enabled_features'):
+                    result['features'] = list(vm.get_enabled_features())
+
+            # Calculate upgrade progress
+            total = result['peer_stats']['total']
+            if total > 0:
+                compatible = result['peer_stats'].get('compatible', total)
+                result['upgrade_progress'] = int((compatible / total) * 100)
+
+        return jsonify(result)
+    except Exception as e:
+        logging.warning(f"P2P version info failed: {e}")
+        return jsonify({
+            'current_version': '1.0.0',
+            'min_supported': '1.0.0',
+            'peer_stats': {'total': 0, 'compatible': 0},
+            'features': [],
+            'upgrade_progress': 100,
+            'error': str(e)
+        })
+
+
+@app.route('/api/p2p/storage', methods=['GET'])
+@authRequired
+def apiP2PStorage():
+    """Get storage redundancy status and disk usage."""
+    try:
+        import os
+        result = {
+            'disk_usage': {
+                'used_bytes': 0,
+                'used_mb': 0.0,
+                'file_count': 0,
+            },
+            'backends': {
+                'memory': {'active': True, 'items': 0},
+                'file': {'active': False, 'items': 0, 'path': None},
+                'dht': {'active': False, 'items': 0},
+            },
+            'status': 'healthy',
+            'deferred_rewards': 0,
+            'alerts': 0,
+        }
+
+        # Check for storage manager
+        if hasattr(start, '_storage_redundancy') and start._storage_redundancy:
+            storage = start._storage_redundancy
+            if hasattr(storage, 'get_stats'):
+                stats = storage.get_stats()
+                result.update(stats)
+            if hasattr(storage, '_backends'):
+                for name, backend in storage._backends.items():
+                    result['backends'][name] = {
+                        'active': True,
+                        'items': getattr(backend, 'item_count', 0),
+                        'path': getattr(backend, 'storage_path', None),
+                    }
+
+        # Calculate disk usage from Satori data directories
+        data_paths = [
+            os.path.expanduser('~/.satori'),
+            '/Satori/Neuron/data',
+            '/Satori/Neuron/wallet',
+        ]
+        total_bytes = 0
+        file_count = 0
+
+        for path in data_paths:
+            if os.path.exists(path):
+                for root, dirs, files in os.walk(path):
+                    for f in files:
+                        try:
+                            fp = os.path.join(root, f)
+                            total_bytes += os.path.getsize(fp)
+                            file_count += 1
+                        except (OSError, IOError):
+                            pass
+
+        result['disk_usage'] = {
+            'used_bytes': total_bytes,
+            'used_mb': round(total_bytes / (1024 * 1024), 2),
+            'file_count': file_count,
+        }
+
+        # Check for deferred rewards
+        if hasattr(start, '_prediction_protocol') and start._prediction_protocol:
+            proto = start._prediction_protocol
+            if hasattr(proto, 'get_deferred_count'):
+                result['deferred_rewards'] = proto.get_deferred_count()
+
+        # Determine status
+        if result['alerts'] > 0:
+            result['status'] = 'warning'
+        elif result['disk_usage']['used_mb'] > 5000:  # > 5GB
+            result['status'] = 'warning'
+
+        return jsonify(result)
+    except Exception as e:
+        logging.warning(f"P2P storage info failed: {e}")
+        return jsonify({
+            'disk_usage': {'used_bytes': 0, 'used_mb': 0.0, 'file_count': 0},
+            'backends': {'memory': {'active': True, 'items': 0}},
+            'status': 'unknown',
+            'error': str(e)
+        })
+
+
+@app.route('/api/p2p/bandwidth', methods=['GET'])
+@authRequired
+def apiP2PBandwidth():
+    """Get bandwidth usage statistics and QoS status."""
+    try:
+        import time
+        result = {
+            'global': {
+                'bytes_sent': 0,
+                'bytes_received': 0,
+                'messages_sent': 0,
+                'messages_received': 0,
+                'bytes_per_second': 0,
+                'messages_per_second': 0,
+            },
+            'topics': {},
+            'peers': {},
+            'qos': {
+                'enabled': False,
+                'current_rate': 0,
+                'max_rate': 0,
+                'drops': 0,
+                'throttling': False,
+            },
+            'uptime_seconds': 0,
+        }
+
+        # Get bandwidth manager stats
+        if hasattr(start, '_bandwidth_qos') and start._bandwidth_qos:
+            bw = start._bandwidth_qos
+            if hasattr(bw, 'get_global_stats'):
+                result['global'] = bw.get_global_stats()
+            if hasattr(bw, 'get_topic_stats'):
+                result['topics'] = bw.get_topic_stats()
+            if hasattr(bw, 'get_qos_status'):
+                result['qos'] = bw.get_qos_status()
+            if hasattr(bw, 'get_peer_stats'):
+                result['peers'] = bw.get_peer_stats()
+
+        # Check P2P peers for basic stats
+        if hasattr(start, '_p2p_peers') and start._p2p_peers:
+            peers = start._p2p_peers
+            if hasattr(peers, 'get_bandwidth_stats'):
+                stats = peers.get_bandwidth_stats()
+                if 'bytes_sent' in stats:
+                    result['global'].update(stats)
+            if hasattr(peers, '_start_time'):
+                result['uptime_seconds'] = int(time.time() - peers._start_time)
+
+        return jsonify(result)
+    except Exception as e:
+        logging.warning(f"P2P bandwidth info failed: {e}")
+        return jsonify({
+            'global': {'bytes_sent': 0, 'bytes_received': 0},
+            'qos': {'enabled': False, 'drops': 0},
+            'error': str(e)
+        })
+
+
+@app.route('/api/p2p/bandwidth/history', methods=['GET'])
+@authRequired
+def apiP2PBandwidthHistory():
+    """Get bandwidth usage history for charting."""
+    try:
+        import time
+        minutes = request.args.get('minutes', 60, type=int)
+        minutes = min(minutes, 1440)  # Max 24 hours
+
+        result = {
+            'timestamps': [],
+            'bytes_sent': [],
+            'bytes_received': [],
+            'messages_per_second': [],
+            'resolution_seconds': 60,
+        }
+
+        # Get history from bandwidth manager
+        if hasattr(start, '_bandwidth_qos') and start._bandwidth_qos:
+            bw = start._bandwidth_qos
+            if hasattr(bw, 'get_history'):
+                history = bw.get_history(minutes=minutes)
+                if history:
+                    result.update(history)
+
+        # If no real data, return empty arrays
+        if not result['timestamps']:
+            now = int(time.time())
+            for i in range(min(minutes, 60)):
+                result['timestamps'].append(now - (i * 60))
+                result['bytes_sent'].append(0)
+                result['bytes_received'].append(0)
+                result['messages_per_second'].append(0)
+            result['timestamps'].reverse()
+            result['bytes_sent'].reverse()
+            result['bytes_received'].reverse()
+            result['messages_per_second'].reverse()
+
+        return jsonify(result)
+    except Exception as e:
+        logging.warning(f"P2P bandwidth history failed: {e}")
+        return jsonify({
+            'timestamps': [],
+            'bytes_sent': [],
+            'bytes_received': [],
+            'error': str(e)
+        })
+
+
+###############################################################################
+## Pricing API Routes (SafeTrade) #############################################
+###############################################################################
+
+@app.route('/api/p2p/pricing/satori', methods=['GET'])
+@authRequired
+def apiP2PPricingSatori():
+    """Get SATORI price info from SafeTrade."""
+    try:
+        # Try P2P price provider first
+        if hasattr(start, '_price_provider') and start._price_provider:
+            provider = start._price_provider
+            if hasattr(provider, 'get_satori_ticker'):
+                ticker = provider.get_satori_ticker()
+                if ticker:
+                    return jsonify({
+                        'success': True,
+                        'price': {
+                            'last': ticker.last if hasattr(ticker, 'last') else ticker.get('last', 0),
+                            'bid': ticker.bid if hasattr(ticker, 'bid') else ticker.get('bid', 0),
+                            'ask': ticker.ask if hasattr(ticker, 'ask') else ticker.get('ask', 0),
+                            'volume': ticker.volume if hasattr(ticker, 'volume') else ticker.get('volume', 0),
+                            'percentChange': ticker.percent_change if hasattr(ticker, 'percent_change') else ticker.get('percentChange', 0),
+                        },
+                        'source': 'p2p',
+                    })
+
+        # Fallback to central server
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getSatoriPrice'):
+                price = start.server.getSatoriPrice()
+                if price:
+                    return jsonify({
+                        'success': True,
+                        'price': price,
+                        'source': 'central',
+                    })
+
+        return jsonify({'success': False, 'error': 'Price not available'})
+    except Exception as e:
+        logging.warning(f"Get SATORI price failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/p2p/pricing/evr', methods=['GET'])
+@authRequired
+def apiP2PPricingEvr():
+    """Get EVR price info from SafeTrade."""
+    try:
+        # Try P2P price provider first
+        if hasattr(start, '_price_provider') and start._price_provider:
+            provider = start._price_provider
+            if hasattr(provider, 'get_evr_ticker'):
+                ticker = provider.get_evr_ticker()
+                if ticker:
+                    return jsonify({
+                        'success': True,
+                        'price': {
+                            'last': ticker.last if hasattr(ticker, 'last') else ticker.get('last', 0),
+                            'bid': ticker.bid if hasattr(ticker, 'bid') else ticker.get('bid', 0),
+                            'ask': ticker.ask if hasattr(ticker, 'ask') else ticker.get('ask', 0),
+                            'volume': ticker.volume if hasattr(ticker, 'volume') else ticker.get('volume', 0),
+                            'percentChange': ticker.percent_change if hasattr(ticker, 'percent_change') else ticker.get('percentChange', 0),
+                        },
+                        'source': 'p2p',
+                    })
+
+        # Fallback to central server
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getEvrPrice'):
+                price = start.server.getEvrPrice()
+                if price:
+                    return jsonify({
+                        'success': True,
+                        'price': price,
+                        'source': 'central',
+                    })
+
+        return jsonify({'success': False, 'error': 'Price not available'})
+    except Exception as e:
+        logging.warning(f"Get EVR price failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/p2p/pricing/exchange-rate', methods=['GET'])
+@authRequired
+def apiP2PPricingExchangeRate():
+    """Get EVR to SATORI exchange rate for donations."""
+    try:
+        # Try P2P price provider first
+        if hasattr(start, '_price_provider') and start._price_provider:
+            provider = start._price_provider
+            if hasattr(provider, 'get_exchange_rate'):
+                rate = provider.get_exchange_rate('EVR', 'SATORI')
+                if rate:
+                    return jsonify({
+                        'success': True,
+                        'exchange_rate': rate,
+                        'pair': 'EVR/SATORI',
+                        'source': 'p2p',
+                    })
+
+        # Calculate from individual prices
+        evr_price = None
+        satori_price = None
+
+        if hasattr(start, '_price_provider') and start._price_provider:
+            provider = start._price_provider
+            if hasattr(provider, 'get_evr_ticker'):
+                evr_ticker = provider.get_evr_ticker()
+                if evr_ticker:
+                    evr_price = evr_ticker.last if hasattr(evr_ticker, 'last') else evr_ticker.get('last')
+            if hasattr(provider, 'get_satori_ticker'):
+                satori_ticker = provider.get_satori_ticker()
+                if satori_ticker:
+                    satori_price = satori_ticker.last if hasattr(satori_ticker, 'last') else satori_ticker.get('last')
+
+        if evr_price and satori_price and float(satori_price) > 0:
+            rate = float(evr_price) / float(satori_price)
+            return jsonify({
+                'success': True,
+                'exchange_rate': rate,
+                'pair': 'EVR/SATORI',
+                'evr_usd': evr_price,
+                'satori_usd': satori_price,
+                'source': 'calculated',
+            })
+
+        # Fallback default
+        return jsonify({
+            'success': True,
+            'exchange_rate': 0.018,  # Default estimate
+            'pair': 'EVR/SATORI',
+            'source': 'default',
+        })
+    except Exception as e:
+        logging.warning(f"Get exchange rate failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+###############################################################################
+## Treasury Donation Routes ###################################################
+###############################################################################
+
+@app.route('/donate', methods=['GET'])
+@authRequired
+def donate():
+    """Treasury donation page."""
+    return render_template('donate.html', **getResp({
+        'title': 'Donate',
+    }))
+
+
+@app.route('/donate/treasury-address', methods=['GET'])
+@authRequired
+def donateTreasuryAddress():
+    """Get the treasury multi-sig address."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getTreasuryAddress'):
+                address = start.server.getTreasuryAddress()
+                return address or 'Not available'
+        return 'Not available'
+    except Exception as e:
+        logging.error(f"Get treasury address failed: {e}")
+        return 'Error'
+
+
+@app.route('/donate/send', methods=['POST'])
+@authRequired
+def donateSend():
+    """Submit a donation to the treasury."""
+    try:
+        data = request.get_json() or {}
+        amount = float(data.get('amount', 0))
+
+        if amount <= 0:
+            return jsonify({'success': False, 'error': 'Invalid amount'})
+
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'donateToTreasury'):
+                result = start.server.donateToTreasury(amount)
+                return jsonify(result)
+
+        return jsonify({'success': False, 'error': 'Donation not available'})
+    except Exception as e:
+        logging.error(f"Donate send failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/donate/stats', methods=['GET'])
+@authRequired
+def donateStats():
+    """Get donor statistics."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getDonorStats'):
+                stats = start.server.getDonorStats()
+                return jsonify(stats)
+
+        return jsonify({
+            'total_donated': 0,
+            'donation_count': 0,
+            'tier': 'none',
+            'badges_earned': [],
+        })
+    except Exception as e:
+        logging.error(f"Get donor stats failed: {e}")
+        return jsonify({'error': str(e)})
+
+
+@app.route('/donate/history', methods=['GET'])
+@authRequired
+def donateHistory():
+    """Get donation history."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getDonationHistory'):
+                history = start.server.getDonationHistory()
+                return jsonify(history)
+
+        return jsonify([])
+    except Exception as e:
+        logging.error(f"Get donation history failed: {e}")
+        return jsonify([])
+
+
+@app.route('/donate/top-donors', methods=['GET'])
+@authRequired
+def donateTopDonors():
+    """Get top donors leaderboard."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getTopDonors'):
+                donors = start.server.getTopDonors(limit=10)
+                return jsonify(donors)
+
+        return jsonify([])
+    except Exception as e:
+        logging.error(f"Get top donors failed: {e}")
+        return jsonify([])
+
+
+###############################################################################
+## Signer Administration Routes ###############################################
+###############################################################################
+
+@app.route('/signer/admin', methods=['GET'])
+@authRequired
+def signer_admin():
+    """Signer administration page (signers only)."""
+    # Check if user is authorized signer
+    is_signer = False
+    wallet_address = ''
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'isAuthorizedSigner'):
+                is_signer = start.server.isAuthorizedSigner()
+        if hasattr(start, 'wallet') and start.wallet:
+            wallet_address = start.wallet.address
+    except Exception:
+        pass
+
+    if not is_signer:
+        flash('Access denied: Not an authorized signer')
+        return redirect('/dashboard')
+
+    return render_template('signer-admin.html', **getResp({
+        'title': 'Signer Admin',
+        'wallet_address': wallet_address,
+    }))
+
+
+@app.route('/signer/treasury-status', methods=['GET'])
+@authRequired
+def signerTreasuryStatus():
+    """Get treasury status (signers only)."""
+    try:
+        # Check if signer
+        is_signer = False
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'isAuthorizedSigner'):
+                is_signer = start.server.isAuthorizedSigner()
+
+        if not is_signer:
+            return jsonify({'error': 'Not authorized'})
+
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getTreasuryBalance'):
+                balance = start.server.getTreasuryBalance()
+                return jsonify(balance)
+
+        return jsonify({'evr': 0, 'satori': 0, 'treasury_address': ''})
+    except Exception as e:
+        logging.error(f"Get treasury status failed: {e}")
+        return jsonify({'error': str(e)})
+
+
+@app.route('/signer/pending', methods=['GET'])
+@authRequired
+def signerPending():
+    """Get pending signature requests (signers only)."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getSignerPendingRequests'):
+                requests = start.server.getSignerPendingRequests()
+                return jsonify(requests)
+
+        return jsonify([])
+    except Exception as e:
+        logging.error(f"Get pending requests failed: {e}")
+        return jsonify([])
+
+
+@app.route('/signer/approve/<request_id>', methods=['POST'])
+@authRequired
+def signerApprove(request_id: str):
+    """Approve and sign a request (signers only)."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'approveSignerRequest'):
+                result = start.server.approveSignerRequest(request_id)
+                return jsonify(result)
+
+        return jsonify({'success': False, 'error': 'Signer not available'})
+    except Exception as e:
+        logging.error(f"Approve request failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/signer/reject/<request_id>', methods=['POST'])
+@authRequired
+def signerReject(request_id: str):
+    """Reject a request (signers only)."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'rejectSignerRequest'):
+                result = start.server.rejectSignerRequest(request_id)
+                return jsonify(result)
+
+        return jsonify({'success': False, 'error': 'Signer not available'})
+    except Exception as e:
+        logging.error(f"Reject request failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# REWARD ADDRESS ROUTES (Custom Payout Addresses)
+# ============================================================================
+
+@app.route('/reward-address', methods=['GET'])
+@authRequired
+def getRewardAddress():
+    """Get current reward address."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getMyRewardAddress'):
+                address = start.server.getMyRewardAddress()
+                return jsonify({
+                    'success': True,
+                    'reward_address': address,
+                    'has_custom': address is not None
+                })
+        return jsonify({'success': True, 'reward_address': None, 'has_custom': False})
+    except Exception as e:
+        logging.error(f"Get reward address failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/reward-address', methods=['POST'])
+@authRequired
+def setRewardAddress():
+    """Set custom reward address."""
+    try:
+        data = request.get_json() or {}
+        address = data.get('address', '')
+        memo = data.get('memo', '')
+
+        if not address:
+            return jsonify({'success': False, 'error': 'Address required'})
+
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'setRewardAddress'):
+                # Get signature from wallet
+                wallet = start.wallet if hasattr(start, 'wallet') else None
+                signature = ''
+                pubkey = ''
+                if wallet:
+                    pubkey = wallet.pubkey if hasattr(wallet, 'pubkey') else ''
+                    # Sign message to prove ownership
+                    if hasattr(wallet, 'sign'):
+                        message = f"SATORI_REWARD_ADDR:{wallet.address}:{address}"
+                        signature = wallet.sign(message)
+
+                result = start.server.setRewardAddress(
+                    signature=signature,
+                    pubkey=pubkey,
+                    address=address,
+                    memo=memo
+                )
+                return jsonify(result if result else {'success': True})
+
+        return jsonify({'success': False, 'error': 'Server not available'})
+    except Exception as e:
+        logging.error(f"Set reward address failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/reward-address/remove', methods=['POST'])
+@authRequired
+def removeRewardAddress():
+    """Remove custom reward address."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'removeRewardAddress'):
+                result = start.server.removeRewardAddress()
+                return jsonify(result)
+        return jsonify({'success': False, 'error': 'Server not available'})
+    except Exception as e:
+        logging.error(f"Remove reward address failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# REFERRAL ROUTES (Invite/Referral System with Tiers)
+# ============================================================================
+
+@app.route('/referral/stats', methods=['GET'])
+@authRequired
+def getReferralStats():
+    """Get referral statistics for current user."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getReferrerStats'):
+                stats = start.server.getReferrerStats()
+                return jsonify({'success': True, 'stats': stats})
+        return jsonify({
+            'success': True,
+            'stats': {
+                'referral_count': 0,
+                'tier': None,
+                'bonus': 0.0,
+                'achievements': []
+            }
+        })
+    except Exception as e:
+        logging.error(f"Get referral stats failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/referral/bonus', methods=['GET'])
+@authRequired
+def getReferralBonus():
+    """Get referral bonus multiplier."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getReferralBonus'):
+                bonus = start.server.getReferralBonus()
+                return jsonify({'success': True, 'bonus': bonus})
+        return jsonify({'success': True, 'bonus': 0.0})
+    except Exception as e:
+        logging.error(f"Get referral bonus failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/referral/top', methods=['GET'])
+@authRequired
+def getTopReferrers():
+    """Get top referrers leaderboard."""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getTopReferrers'):
+                referrers = start.server.getTopReferrers(limit)
+                return jsonify({'success': True, 'referrers': referrers})
+        return jsonify({'success': True, 'referrers': []})
+    except Exception as e:
+        logging.error(f"Get top referrers failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/referral/my-referrer', methods=['GET'])
+@authRequired
+def getMyReferrer():
+    """Get who referred this user."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getMyReferrer'):
+                referrer = start.server.getMyReferrer()
+                return jsonify({'success': True, 'referrer': referrer})
+        return jsonify({'success': True, 'referrer': None})
+    except Exception as e:
+        logging.error(f"Get my referrer failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# TREASURY ALERT ROUTES (Deferred Rewards & Alerts)
+# ============================================================================
+
+@app.route('/treasury/deferred', methods=['GET'])
+@authRequired
+def getDeferredRewards():
+    """Get deferred rewards for current user."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getDeferredRewards'):
+                deferred = start.server.getDeferredRewards()
+                return jsonify({'success': True, 'deferred': deferred})
+        return jsonify({
+            'success': True,
+            'deferred': {
+                'total_pending': 0.0,
+                'deferred_count': 0,
+                'deferred_rewards': []
+            }
+        })
+    except Exception as e:
+        logging.error(f"Get deferred rewards failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/treasury/deferred/total', methods=['GET'])
+@authRequired
+def getDeferredRewardsTotal():
+    """Get network-wide deferred rewards total."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getDeferredRewardsTotal'):
+                total = start.server.getDeferredRewardsTotal()
+                return jsonify({'success': True, 'total': total})
+        return jsonify({'success': True, 'total': {'total_deferred': 0.0, 'deferred_count': 0}})
+    except Exception as e:
+        logging.error(f"Get deferred rewards total failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/treasury/alerts/history', methods=['GET'])
+@authRequired
+def getAlertHistory():
+    """Get treasury alert history."""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'getAlertHistory'):
+                history = start.server.getAlertHistory(limit)
+                return jsonify({'success': True, 'history': history})
+        return jsonify({'success': True, 'history': []})
+    except Exception as e:
+        logging.error(f"Get alert history failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# PROXY/DELEGATION ROUTES (Charity & Child Management)
+# ============================================================================
+
+@app.route('/proxy/charity/<address>', methods=['POST'])
+@authRequired
+def setProxyCharity(address: str):
+    """Mark a proxy child as charity."""
+    try:
+        data = request.get_json() or {}
+        child_id = data.get('child_id')
+
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'stakeProxyCharity'):
+                result = start.server.stakeProxyCharity(address, child_id)
+                return jsonify({'success': result[0], 'message': result[1] if len(result) > 1 else ''})
+        return jsonify({'success': False, 'error': 'Server not available'})
+    except Exception as e:
+        logging.error(f"Set proxy charity failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/proxy/charity/remove/<address>', methods=['POST'])
+@authRequired
+def removeProxyCharity(address: str):
+    """Remove charity status from a proxy child."""
+    try:
+        data = request.get_json() or {}
+        child_id = data.get('child_id')
+
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'stakeProxyCharityNot'):
+                result = start.server.stakeProxyCharityNot(address, child_id)
+                return jsonify({'success': result[0], 'message': result[1] if len(result) > 1 else ''})
+        return jsonify({'success': False, 'error': 'Server not available'})
+    except Exception as e:
+        logging.error(f"Remove proxy charity failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/proxy/remove/<address>', methods=['POST'])
+@authRequired
+def removeProxyChild(address: str):
+    """Remove a proxy child."""
+    try:
+        data = request.get_json() or {}
+        child_id = data.get('child_id')
+
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'stakeProxyRemove'):
+                result = start.server.stakeProxyRemove(address, child_id)
+                return jsonify({'success': result[0], 'message': result[1] if len(result) > 1 else ''})
+        return jsonify({'success': False, 'error': 'Server not available'})
+    except Exception as e:
+        logging.error(f"Remove proxy child failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/proxy/children', methods=['GET'])
+@authRequired
+def getProxyChildren():
+    """Get all proxy children."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'stakeProxyChildren'):
+                result = start.server.stakeProxyChildren()
+                return jsonify({'success': result[0], 'children': result[1] if len(result) > 1 else []})
+        return jsonify({'success': True, 'children': []})
+    except Exception as e:
+        logging.error(f"Get proxy children failed: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# LENDING VIEW ROUTES
+# ============================================================================
+
+@app.route('/lend/addresses', methods=['GET'])
+@authRequired
+def getLendAddresses():
+    """Get all lending addresses (pools user is lending to)."""
+    try:
+        if hasattr(start, 'server') and start.server:
+            if hasattr(start.server, 'poolAddresses'):
+                result = start.server.poolAddresses()
+                return jsonify({'success': result[0], 'addresses': result[1] if len(result) > 1 else []})
+        return jsonify({'success': True, 'addresses': []})
+    except Exception as e:
+        logging.error(f"Get lend addresses failed: {e}")
         return jsonify({'success': False, 'error': str(e)})

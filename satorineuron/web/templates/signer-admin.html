@@ -1,0 +1,546 @@
+{% extends "basic.html" %}
+{% block content %}
+  <!-- Signer Status Card -->
+  <div class="row">
+    <div class="col-xl-12 col-sm-12 mb-xl-0 mb-4">
+      <div class="card {% if darkmode %}dark-colors{% endif %}">
+        <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+          <div class="col-xl-12 col-sm-12 mb-xl-0">
+            <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                    style="padding-top:1.5rem; text-transform: none;"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#signerStatusContent"
+                    aria-expanded="true"
+                    aria-controls="signerStatusContent">
+                    <h4 class="{% if darkmode %}dark-colors{% endif %}">Signer Administration</h4>
+            </button>
+          </div>
+        </div>
+        <div id="signerStatusContent" class="collapse show">
+          <div class="row" style='padding-left:2rem;padding-right:2rem; padding-top: .5rem; padding-bottom: 2rem;'>
+            <div class="col-xl-4 col-sm-6 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Your Address:</p>
+              <p id="signerAddress" class="{% if darkmode %}dark-colors{% endif %}" style="font-family: monospace; font-size: 0.85rem;">
+                {{ wallet_address }}
+              </p>
+            </div>
+            <div class="col-xl-4 col-sm-6 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Signer Status:</p>
+              <h5 id="signerStatus" class="{% if darkmode %}dark-colors{% endif %}" style="color: #4CAF50;">
+                Authorized Signer
+              </h5>
+            </div>
+            <div class="col-xl-4 col-sm-6 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Multi-sig Threshold:</p>
+              <h5 id="multisigThreshold" class="{% if darkmode %}dark-colors{% endif %}">
+                3 of 5
+              </h5>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <br>
+
+  <!-- Treasury Status Card -->
+  <div class="row">
+    <div class="col-xl-6 col-sm-12 mb-xl-0 mb-4">
+      <div class="card {% if darkmode %}dark-colors{% endif %}">
+        <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+          <div class="col-xl-12 col-sm-12 mb-xl-0">
+            <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                    style="padding-top:1.5rem; text-transform: none;"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#treasuryStatusContent"
+                    aria-expanded="true"
+                    aria-controls="treasuryStatusContent">
+                    <h4 class="{% if darkmode %}dark-colors{% endif %}">Treasury Status</h4>
+            </button>
+          </div>
+        </div>
+        <div id="treasuryStatusContent" class="collapse show">
+          <div class="row" style='padding-left:2rem;padding-right:2rem; padding-top: .5rem; padding-bottom: 2rem;'>
+            <div class="col-xl-12 col-sm-12 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Treasury Address:</p>
+              <p id="treasuryAddress" class="{% if darkmode %}dark-colors{% endif %}" style="font-family: monospace; font-size: 0.85rem;">
+                Loading...
+              </p>
+            </div>
+            <div class="col-xl-6 col-sm-6 mb-xl-0" style="margin-top: 1rem;">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">EVR Balance:</p>
+              <h5 id="treasuryEvrBalance" class="{% if darkmode %}dark-colors{% endif %}">Loading...</h5>
+            </div>
+            <div class="col-xl-6 col-sm-6 mb-xl-0" style="margin-top: 1rem;">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">SATORI Balance:</p>
+              <h5 id="treasurySatoriBalance" class="{% if darkmode %}dark-colors{% endif %}">Loading...</h5>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending Stats Card -->
+    <div class="col-xl-6 col-sm-12 mb-xl-0 mb-4">
+      <div class="card {% if darkmode %}dark-colors{% endif %}">
+        <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+          <div class="col-xl-12 col-sm-12 mb-xl-0">
+            <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                    style="padding-top:1.5rem; text-transform: none;"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#pendingStatsContent"
+                    aria-expanded="true"
+                    aria-controls="pendingStatsContent">
+                    <h4 class="{% if darkmode %}dark-colors{% endif %}">Pending Operations</h4>
+            </button>
+          </div>
+        </div>
+        <div id="pendingStatsContent" class="collapse show">
+          <div class="row" style='padding-left:2rem;padding-right:2rem; padding-top: .5rem; padding-bottom: 2rem;'>
+            <div class="col-xl-4 col-sm-4 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Pending Requests:</p>
+              <h3 id="pendingCount" class="{% if darkmode %}dark-colors{% endif %}" style="color: #FF9800;">0</h3>
+            </div>
+            <div class="col-xl-4 col-sm-4 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Awaiting Your Sig:</p>
+              <h3 id="awaitingSignature" class="{% if darkmode %}dark-colors{% endif %}" style="color: #2196F3;">0</h3>
+            </div>
+            <div class="col-xl-4 col-sm-4 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Ready to Broadcast:</p>
+              <h3 id="readyToBroadcast" class="{% if darkmode %}dark-colors{% endif %}" style="color: #4CAF50;">0</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <br>
+
+  <!-- Pending Signature Requests -->
+  <div class="row">
+    <div class="col-xl-12 col-sm-12 mb-xl-0 mb-4">
+      <div class="card {% if darkmode %}dark-colors{% endif %}">
+        <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+          <div class="col-xl-12 col-sm-12 mb-xl-0">
+            <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                    style="padding-top:1.5rem; text-transform: none;"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#pendingRequestsContent"
+                    aria-expanded="true"
+                    aria-controls="pendingRequestsContent">
+                    <h4 class="{% if darkmode %}dark-colors{% endif %}">Pending Signature Requests</h4>
+            </button>
+          </div>
+        </div>
+        <div id="pendingRequestsContent" class="collapse show">
+          <div class="row" style='padding-left:2rem;padding-right:2rem; padding-bottom: 1rem;'>
+            <div class="col-xl-12 col-sm-12">
+              <button class="btn btn-sm btn-outline-primary" onclick="loadPendingRequests()">Refresh</button>
+            </div>
+          </div>
+          <div class="table-responsive" style="padding: 0 2rem 2rem 2rem;">
+            <table class="table align-items-center mb-0 {% if darkmode %}table-dark{% endif %}">
+              <thead>
+                <tr>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Request ID</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Type</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Amount</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Recipient</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Signatures</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="pendingRequestsTable">
+                <tr>
+                  <td colspan="6" class="text-center text-sm {% if darkmode %}dark-colors{% endif %}">
+                    Loading...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <br>
+
+  <!-- Recent Activity Log -->
+  <div class="row">
+    <div class="col-xl-12 col-sm-12 mb-xl-0 mb-4">
+      <div class="card {% if darkmode %}dark-colors{% endif %}">
+        <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+          <div class="col-xl-12 col-sm-12 mb-xl-0">
+            <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                    style="padding-top:1.5rem; text-transform: none;"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#activityLogContent"
+                    aria-expanded="false"
+                    aria-controls="activityLogContent">
+                    <h4 class="{% if darkmode %}dark-colors{% endif %}">Recent Activity</h4>
+            </button>
+          </div>
+        </div>
+        <div id="activityLogContent" class="collapse">
+          <div class="table-responsive" style="padding: 1rem 2rem 2rem 2rem;">
+            <table class="table align-items-center mb-0 {% if darkmode %}table-dark{% endif %}">
+              <thead>
+                <tr>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Time</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Action</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Request ID</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Result</th>
+                </tr>
+              </thead>
+              <tbody id="activityLogTable">
+                <tr>
+                  <td colspan="4" class="text-center text-sm {% if darkmode %}dark-colors{% endif %}">
+                    No recent activity
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <br>
+
+  <!-- Deferred Rewards Section -->
+  <div class="row">
+    <div class="col-xl-6 col-sm-12 mb-xl-0 mb-4">
+      <div class="card {% if darkmode %}dark-colors{% endif %}">
+        <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+          <div class="col-xl-12 col-sm-12 mb-xl-0">
+            <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                    style="padding-top:1.5rem; text-transform: none;"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#deferredRewardsContent"
+                    aria-expanded="true"
+                    aria-controls="deferredRewardsContent">
+                    <h4 class="{% if darkmode %}dark-colors{% endif %}">Deferred Rewards</h4>
+            </button>
+          </div>
+        </div>
+        <div id="deferredRewardsContent" class="collapse show">
+          <div class="row" style='padding-left:2rem;padding-right:2rem; padding-top: .5rem; padding-bottom: 1rem;'>
+            <div class="col-xl-6 col-sm-6 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Total Deferred:</p>
+              <h4 id="totalDeferred" class="{% if darkmode %}dark-colors{% endif %}" style="color: #FF9800;">0 SATORI</h4>
+            </div>
+            <div class="col-xl-6 col-sm-6 mb-xl-0">
+              <p class="mb-1 {% if darkmode %}dark-colors{% endif %}">Pending Payouts:</p>
+              <h4 id="pendingPayouts" class="{% if darkmode %}dark-colors{% endif %}">0</h4>
+            </div>
+          </div>
+          <div class="row" style='padding-left:2rem;padding-right:2rem; padding-bottom: 1rem;'>
+            <div class="col-xl-12 col-sm-12">
+              <button class="btn btn-sm btn-outline-primary" onclick="loadDeferredRewards()">Refresh</button>
+            </div>
+          </div>
+          <div class="table-responsive" style="padding: 0 2rem 2rem 2rem;">
+            <table class="table align-items-center mb-0 {% if darkmode %}table-dark{% endif %}">
+              <thead>
+                <tr>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Address</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Amount</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Reason</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Round</th>
+                </tr>
+              </thead>
+              <tbody id="deferredRewardsTable">
+                <tr>
+                  <td colspan="4" class="text-center text-sm {% if darkmode %}dark-colors{% endif %}">
+                    Loading...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Treasury Alerts History -->
+    <div class="col-xl-6 col-sm-12 mb-xl-0 mb-4">
+      <div class="card {% if darkmode %}dark-colors{% endif %}">
+        <div class="row" style='padding-left:2rem;padding-right:2rem;'>
+          <div class="col-xl-12 col-sm-12 mb-xl-0">
+            <button class="btn btn-link w-100 text-left {% if darkmode %}dark-colors{% endif %}"
+                    style="padding-top:1.5rem; text-transform: none;"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#alertHistoryContent"
+                    aria-expanded="true"
+                    aria-controls="alertHistoryContent">
+                    <h4 class="{% if darkmode %}dark-colors{% endif %}">Alert History</h4>
+            </button>
+          </div>
+        </div>
+        <div id="alertHistoryContent" class="collapse show">
+          <div class="row" style='padding-left:2rem;padding-right:2rem; padding-bottom: 1rem;'>
+            <div class="col-xl-12 col-sm-12">
+              <button class="btn btn-sm btn-outline-primary" onclick="loadAlertHistory()">Refresh</button>
+            </div>
+          </div>
+          <div class="table-responsive" style="padding: 0 2rem 2rem 2rem; max-height: 300px; overflow-y: auto;">
+            <table class="table align-items-center mb-0 {% if darkmode %}table-dark{% endif %}">
+              <thead>
+                <tr>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Time</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Type</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Severity</th>
+                  <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Message</th>
+                </tr>
+              </thead>
+              <tbody id="alertHistoryTable">
+                <tr>
+                  <td colspan="4" class="text-center text-sm {% if darkmode %}dark-colors{% endif %}">
+                    Loading...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% include 'footer-on-front.html' %}
+
+<script>
+  document.addEventListener('DOMContentLoaded', (event) => {
+    loadTreasuryStatus();
+    loadPendingRequests();
+    loadDeferredRewards();
+    loadAlertHistory();
+  });
+
+  // Auto-refresh every 30 seconds
+  setInterval(loadPendingRequests, 30000);
+  setInterval(loadDeferredRewards, 60000);
+  setInterval(loadAlertHistory, 60000);
+
+  function loadTreasuryStatus() {
+    fetch('/signer/treasury-status', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('treasuryAddress').innerText = data.treasury_address || 'Not available';
+        document.getElementById('treasuryEvrBalance').innerText = (data.evr || 0).toFixed(4) + ' EVR';
+        document.getElementById('treasurySatoriBalance').innerText = (data.satori || 0).toFixed(4) + ' SATORI';
+      })
+      .catch(error => {
+        console.error('Error loading treasury status:', error);
+        document.getElementById('treasuryAddress').innerText = 'Error loading';
+      });
+  }
+
+  function loadPendingRequests() {
+    fetch('/signer/pending', { method: 'GET' })
+      .then(response => response.json())
+      .then(requests => {
+        const tbody = document.getElementById('pendingRequestsTable');
+
+        // Update stats
+        const pending = requests.length;
+        const awaiting = requests.filter(r => !r.i_signed).length;
+        const ready = requests.filter(r => r.signature_count >= 3).length;
+
+        document.getElementById('pendingCount').innerText = pending;
+        document.getElementById('awaitingSignature').innerText = awaiting;
+        document.getElementById('readyToBroadcast').innerText = ready;
+
+        if (requests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-sm">No pending requests</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = requests.map(r => {
+          const reqIdShort = r.id ? r.id.substring(0, 12) + '...' : 'Unknown';
+          const recipientShort = r.recipient ? r.recipient.substring(0, 12) + '...' : 'N/A';
+          const sigProgress = r.signature_count + '/3';
+          const sigColor = r.signature_count >= 3 ? '#4CAF50' : (r.signature_count > 0 ? '#FF9800' : '#f44336');
+
+          const approveBtn = r.i_signed
+            ? '<span class="badge bg-success">Signed</span>'
+            : `<button class="btn btn-sm btn-success" onclick="approveRequest('${r.id}')">Approve</button>`;
+
+          const rejectBtn = r.i_signed
+            ? ''
+            : `<button class="btn btn-sm btn-danger" onclick="rejectRequest('${r.id}')" style="margin-left: 5px;">Reject</button>`;
+
+          return `
+            <tr>
+              <td class="text-sm" style="font-family: monospace;">${reqIdShort}</td>
+              <td class="text-sm" style="text-transform: capitalize;">${r.operation_type || 'Unknown'}</td>
+              <td class="text-sm">${r.amount ? r.amount.toFixed(2) + ' SATORI' : 'N/A'}</td>
+              <td class="text-sm" style="font-family: monospace;">${recipientShort}</td>
+              <td class="text-sm" style="color: ${sigColor}; font-weight: bold;">${sigProgress}</td>
+              <td class="text-sm">${approveBtn}${rejectBtn}</td>
+            </tr>
+          `;
+        }).join('');
+      })
+      .catch(error => {
+        console.error('Error loading pending requests:', error);
+        document.getElementById('pendingRequestsTable').innerHTML =
+          '<tr><td colspan="6" class="text-center text-sm">Error loading requests</td></tr>';
+      });
+  }
+
+  function approveRequest(requestId) {
+    if (!confirm('Are you sure you want to approve and sign this request?')) {
+      return;
+    }
+
+    fetch('/signer/approve/' + requestId, { method: 'POST' })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Request approved and signed successfully!');
+          addActivityLog('Approved', requestId, 'Success');
+          loadPendingRequests();
+        } else {
+          alert('Failed to approve: ' + (data.error || 'Unknown error'));
+          addActivityLog('Approve Failed', requestId, data.error || 'Error');
+        }
+      })
+      .catch(error => {
+        console.error('Error approving request:', error);
+        alert('Error approving request: ' + error);
+      });
+  }
+
+  function rejectRequest(requestId) {
+    if (!confirm('Are you sure you want to reject this request?')) {
+      return;
+    }
+
+    fetch('/signer/reject/' + requestId, { method: 'POST' })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Request rejected.');
+          addActivityLog('Rejected', requestId, 'Success');
+          loadPendingRequests();
+        } else {
+          alert('Failed to reject: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(error => {
+        console.error('Error rejecting request:', error);
+        alert('Error rejecting request: ' + error);
+      });
+  }
+
+  function addActivityLog(action, requestId, result) {
+    const tbody = document.getElementById('activityLogTable');
+    const now = new Date().toLocaleTimeString();
+    const reqIdShort = requestId.substring(0, 12) + '...';
+    const resultColor = result === 'Success' ? '#4CAF50' : '#f44336';
+
+    const newRow = `
+      <tr>
+        <td class="text-sm">${now}</td>
+        <td class="text-sm">${action}</td>
+        <td class="text-sm" style="font-family: monospace;">${reqIdShort}</td>
+        <td class="text-sm" style="color: ${resultColor};">${result}</td>
+      </tr>
+    `;
+
+    // Remove "No recent activity" if present
+    if (tbody.innerHTML.includes('No recent activity')) {
+      tbody.innerHTML = newRow;
+    } else {
+      tbody.innerHTML = newRow + tbody.innerHTML;
+    }
+  }
+
+  function loadDeferredRewards() {
+    // Load total deferred amount
+    fetch('/treasury/deferred/total', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('totalDeferred').innerText = (data.total_deferred || 0).toFixed(4) + ' SATORI';
+        document.getElementById('pendingPayouts').innerText = data.pending_count || 0;
+      })
+      .catch(error => {
+        console.error('Error loading deferred total:', error);
+      });
+
+    // Load individual deferred rewards
+    fetch('/treasury/deferred', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.getElementById('deferredRewardsTable');
+
+        if (!data.rewards || data.rewards.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="text-center text-sm">No deferred rewards</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.rewards.slice(0, 20).map(r => {
+          const addrShort = r.address ? r.address.substring(0, 12) + '...' : 'Unknown';
+          return `
+            <tr>
+              <td class="text-sm" style="font-family: monospace;">${addrShort}</td>
+              <td class="text-sm">${(r.amount || 0).toFixed(4)} SATORI</td>
+              <td class="text-sm">${r.reason || 'Unknown'}</td>
+              <td class="text-sm">${r.round_id || 'N/A'}</td>
+            </tr>
+          `;
+        }).join('');
+      })
+      .catch(error => {
+        console.error('Error loading deferred rewards:', error);
+        document.getElementById('deferredRewardsTable').innerHTML =
+          '<tr><td colspan="4" class="text-center text-sm">Error loading deferred rewards</td></tr>';
+      });
+  }
+
+  function loadAlertHistory() {
+    fetch('/treasury/alerts/history?limit=20', { method: 'GET' })
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.getElementById('alertHistoryTable');
+
+        if (!data.alerts || data.alerts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="text-center text-sm">No alerts</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.alerts.map(a => {
+          const time = a.timestamp ? new Date(a.timestamp * 1000).toLocaleString() : 'Unknown';
+          const severityColor = a.severity === 'critical' ? '#f44336' :
+                               (a.severity === 'warning' ? '#FF9800' : '#4CAF50');
+
+          return `
+            <tr>
+              <td class="text-sm">${time}</td>
+              <td class="text-sm" style="text-transform: capitalize;">${a.alert_type || 'Unknown'}</td>
+              <td class="text-sm" style="color: ${severityColor}; text-transform: capitalize;">${a.severity || 'info'}</td>
+              <td class="text-sm">${a.message || ''}</td>
+            </tr>
+          `;
+        }).join('');
+      })
+      .catch(error => {
+        console.error('Error loading alert history:', error);
+        document.getElementById('alertHistoryTable').innerHTML =
+          '<tr><td colspan="4" class="text-center text-sm">Error loading alerts</td></tr>';
+      });
+  }
+</script>
+{% endblock %}
