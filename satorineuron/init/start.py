@@ -105,6 +105,14 @@ def _get_p2p_modules():
         from satorip2p.protocol.prediction_protocol import PredictionProtocol
         from satorip2p.protocol.lending import LendingManager, PoolConfig, LendRegistration
         from satorip2p.protocol.delegation import DelegationManager, DelegationRecord, CharityUpdate
+        from satorip2p.protocol.ping import (
+            PingProtocol, PingRequest, PongResponse,
+            PING_TOPIC, PONG_TOPIC, PING_TIMEOUT,
+        )
+        from satorip2p.protocol.identify import (
+            IdentifyProtocol, PeerIdentity, IdentifyRequest,
+            IDENTIFY_TOPIC, IDENTIFY_REQUEST_TOPIC, IDENTITY_CACHE_TTL,
+        )
         from satorip2p.signing import (
             EvrmoreWallet as P2PEvrmoreWallet,
             sign_message,
@@ -176,6 +184,19 @@ def _get_p2p_modules():
             'MessagePriority': MessagePriority,
             'create_qos_manager': create_qos_manager,
             'get_priority_for_message_type': get_priority_for_message_type,
+            # Ping and Identify protocols
+            'PingProtocol': PingProtocol,
+            'PingRequest': PingRequest,
+            'PongResponse': PongResponse,
+            'PING_TOPIC': PING_TOPIC,
+            'PONG_TOPIC': PONG_TOPIC,
+            'PING_TIMEOUT': PING_TIMEOUT,
+            'IdentifyProtocol': IdentifyProtocol,
+            'PeerIdentity': PeerIdentity,
+            'IdentifyRequest': IdentifyRequest,
+            'IDENTIFY_TOPIC': IDENTIFY_TOPIC,
+            'IDENTIFY_REQUEST_TOPIC': IDENTIFY_REQUEST_TOPIC,
+            'IDENTITY_CACHE_TTL': IDENTITY_CACHE_TTL,
         }
     except ImportError:
         return {'available': False}
